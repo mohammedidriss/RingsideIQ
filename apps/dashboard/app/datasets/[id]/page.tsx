@@ -14,6 +14,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { TrainingCard } from "@/components/TrainingCard";
 import { categoryLength } from "@/lib/categories";
 import {
   api,
@@ -322,6 +323,15 @@ export default function DatasetPage({ params }: { params: { id: string } }) {
           </div>
         )}
       </section>
+
+      {/* Train the camera punch counter on the takes, and test it. */}
+      {blocked && (
+        <TrainingCard
+          datasetId={ds.id}
+          plan={plan}
+          canTrain={kept.some((t) => t.status === "completed")}
+        />
+      )}
     </div>
   );
 }

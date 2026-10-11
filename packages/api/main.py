@@ -36,6 +36,7 @@ from api.routes import (
     rq1,
     sessions,
     studio,
+    training,
     video,
 )
 from api.services.photos import photos_root
@@ -195,6 +196,7 @@ app.include_router(datasets.router)
 app.include_router(datasets.capture)
 app.include_router(studio.router)  # phones link once, follow every capture
 app.include_router(studio.public)
+app.include_router(training.router)  # the dataset's camera punch counter
 app.include_router(rq1.router)
 app.include_router(round_plans.router)
 # Two-fighter bouts (ADR-011) — new endpoints, unversioned.

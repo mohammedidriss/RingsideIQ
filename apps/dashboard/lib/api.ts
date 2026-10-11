@@ -805,6 +805,46 @@ export interface TakeCheck {
   checks: { key: "video" | "wrists" | "punches" | "heart"; level: "ok" | "warn" | "fail"; text: string }[];
 }
 
+/** How a counter did on the test stretches (per camera, on average). */
+export interface CounterScore {
+  precision: number;
+  recall: number;
+  f1: number;
+  counted: number;
+  truth: number;
+}
+
+/** A training run of the dataset's camera punch counter (services.training). */
+export interface TrainingReport {
+  version: number;
+  created_at: string;
+  export_at: string | null;
+  split_strategy: string | null;
+  threshold: number;
+  data: {
+    takes: number;
+    fighters: number;
+    train_stretches: number;
+    test_stretches: number;
+    train_punches: number;
+    test_punches: number;
+    reviewed_labels: boolean;
+  };
+  train_cv: CounterScore;
+  test: { model: CounterScore; baseline: CounterScore };
+  by_block: { block: string; model: CounterScore; baseline: CounterScore }[];
+  by_camera: { camera: string; model: CounterScore; baseline: CounterScore }[];
+  warnings: string[];
+}
+
+export interface TrainingStatus {
+  running: boolean;
+  step: string | null;
+  error: string | null;
+  latest: TrainingReport | null;
+  runs: { version: number; created_at: string; f1_model: number; f1_baseline: number }[];
+}
+
 export interface TakeCrossCheck extends CrossCheckSummary {
   blocks: { key: string; counted: number; confirmed: number; unconfirmed: number }[];
   /** The labels were relabeled with the wrists swapped (protocol card). */
@@ -1250,6 +1290,10 @@ export const api = {
       body: JSON.stringify({ fighter_id: fighterId, block: block ?? null }),
     }),
   takeCheck: (id: string) => req<TakeCheck>(`/v2/takes/${id}/check`),
+  trainCounter: (datasetId: string) =>
+    req<TrainingStatus>(`/v2/datasets/${datasetId}/train`, { method: "POST" }),
+  trainingStatus: (datasetId: string) =>
+    req<TrainingStatus>(`/v2/datasets/${datasetId}/training`),
   protocolPlan: () => req<ProtocolBlockSpec[]>(`/v2/protocol/plan`),
   getTake: (id: string) => req<Take>(`/v2/takes/${id}`),
   discardTake: (id: string) => req<Take>(`/v2/takes/${id}/discard`, { method: "POST" }),
