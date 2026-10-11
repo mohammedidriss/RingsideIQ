@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,8 +23,15 @@ class Settings(BaseSettings):
     database_url: str | None = Field(default=None)
     db_path: Path = Field(default=Path("./data/alion.db"))
     log_level: str = Field(default="INFO")
-    lm_studio_url: str = Field(default="http://localhost:1234/v1")
-    llm_model: str = Field(default="llama-3.1-8b-instruct")
+    # The LLM behind coach advice: any OpenAI-compatible server — LM Studio,
+    # Ollama on this or another computer (http://<host>:11434/v1, or an SSH
+    # tunnel to it), or OpenAI. Unset → coach.llm_client's defaults (local LM
+    # Studio). ALION_LM_STUDIO_URL is the older name for the URL.
+    llm_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("ALION_LLM_URL", "ALION_LM_STUDIO_URL")
+    )
+    llm_model: str | None = Field(default=None)
+    llm_api_key: str | None = Field(default=None)
 
     @property
     def effective_database_url(self) -> str:

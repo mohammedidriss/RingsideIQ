@@ -10,27 +10,36 @@ from typing import Any
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-# Default to local LM Studio. We use Alion-specific env var names
-# (`COACH_*`) so a developer's existing OPENAI_BASE_URL / OPENAI_MODEL
-# (e.g. an Ollama dev setup) doesn't accidentally redirect coach
-# inference to a totally different LLM. Falls back to the generic
-# OPENAI_* names for backwards compatibility, but only if the
-# COACH_* override wasn't set.
-OPENAI_BASE_URL = os.getenv(
-    "COACH_BASE_URL",
-    os.getenv("OPENAI_BASE_URL", "http://localhost:1234/v1"),
-)
-OPENAI_API_KEY = os.getenv(
-    "COACH_API_KEY",
-    os.getenv("OPENAI_API_KEY", "lm-studio"),
-)
-MODEL = os.getenv("COACH_MODEL", "google/gemma-4-e4b")
-# If the env-resolved base URL points at Ollama (port 11434) but the
-# model is the LM Studio default, force the LM Studio URL — that
-# combination is almost always a polluted shell, never a real config.
-if "11434" in OPENAI_BASE_URL and MODEL == "google/gemma-4-e4b":
-    OPENAI_BASE_URL = "http://localhost:1234/v1"
-    OPENAI_API_KEY = "lm-studio"
+from common import get_settings
+
+# Where coach inference goes. Read on every call (so a restarted API picks up a
+# changed .env), in this order:
+#   1. COACH_BASE_URL / COACH_API_KEY / COACH_MODEL in the environment;
+#   2. the project's .env — ALION_LLM_URL (or the older ALION_LM_STUDIO_URL),
+#      ALION_LLM_API_KEY, ALION_LLM_MODEL (common.settings);
+#   3. the generic OPENAI_BASE_URL / OPENAI_API_KEY;
+#   4. local LM Studio.
+# Alion-specific names come first so a developer's existing OPENAI_* (e.g. an
+# Ollama dev setup) doesn't silently redirect coach inference.
+LM_STUDIO_URL = "http://localhost:1234/v1"
+DEFAULT_MODEL = "google/gemma-4-e4b"
+
+
+def llm_config() -> tuple[str, str, str]:
+    """(base URL, API key, model) of the LLM that coach advice uses."""
+    s = get_settings()
+    url = os.getenv("COACH_BASE_URL") or s.llm_url
+    key = os.getenv("COACH_API_KEY") or s.llm_api_key
+    model = os.getenv("COACH_MODEL") or s.llm_model or DEFAULT_MODEL
+    if not url:
+        url = os.getenv("OPENAI_BASE_URL") or LM_STUDIO_URL
+        # An Ollama OPENAI_BASE_URL with the LM Studio default model is a
+        # polluted shell, never a real config — stay on LM Studio.
+        if "11434" in url and model == DEFAULT_MODEL:
+            url = LM_STUDIO_URL
+    key = key or os.getenv("OPENAI_API_KEY") or "lm-studio"
+    return url, key, model
+
 
 # NOTE: a module-level AsyncOpenAI client used to live here. We saw a
 # repro where the long-lived client kept returning "model not found"
@@ -56,9 +65,10 @@ async def generate_corner_advice(system_prompt: str, session_data_json: str) -> 
     async def _call() -> Any:
         # Fresh client per call — avoids the stale-connection 404s
         # described above. AsyncOpenAI is cheap to construct.
-        c = AsyncOpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
+        url, key, model = llm_config()
+        c = AsyncOpenAI(base_url=url, api_key=key)
         return await c.chat.completions.create(
-            model=MODEL,
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": session_data_json},
@@ -92,7 +102,7 @@ async def generate_corner_advice(system_prompt: str, session_data_json: str) -> 
             break
     if completion is None:
         return CoachAdvice(
-            summary=f"Failed to connect to LLM ({MODEL}): {last_err}",
+            summary=f"Failed to connect to LLM ({llm_config()[2]} at {llm_config()[0]}): {last_err}",
             action_items=[],
         )
 
@@ -152,9 +162,10 @@ async def generate_raw(system_prompt: str, user_content: str) -> str:
     import asyncio
 
     async def _call() -> Any:
-        c = AsyncOpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
+        url, key, model = llm_config()
+        c = AsyncOpenAI(base_url=url, api_key=key)
         return await c.chat.completions.create(
-            model=MODEL,
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
