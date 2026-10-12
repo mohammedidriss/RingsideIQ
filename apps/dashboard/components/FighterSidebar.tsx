@@ -9,7 +9,7 @@ import { type ProfileKind, useActiveProfile } from "@/lib/activeProfile";
 // Tab order follows the cockpit flow: train → analyze → care → manage.
 const TABS: { slug: string; label: string; icon: string; roles?: ProfileKind[] }[] = [
   { slug: "", label: "Dashboard", icon: "▦" },
-  { slug: "sessions", label: "Sessions", icon: "▷" },
+  { slug: "sessions", label: "Training sessions", icon: "▷" },
   { slug: "hrv", label: "HRV", icon: "♥" },
   { slug: "observations", label: "Observations", icon: "✎" },
   { slug: "medical", label: "Medical", icon: "✚" },
@@ -97,7 +97,7 @@ export function FighterSidebar({ fighter }: { fighter: Fighter }) {
             }}
             className="flex w-full items-center justify-center rounded-xl bg-emerald-500 px-3 py-2 text-sm font-medium text-black hover:bg-emerald-400 disabled:opacity-50"
           >
-            + New session
+            + Training session
           </button>
         </div>
       )}

@@ -98,7 +98,7 @@ export default function SessionsTab({ params }: { params: { id: string } }) {
     <div className="space-y-6 px-4 py-5 sm:px-8 sm:py-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Sessions</h1>
+          <h1 className="text-2xl font-semibold">Training sessions</h1>
           <p className="text-sm text-neutral-400">
             Capture history, uploaded videos, and per-session metrics.
           </p>
@@ -115,7 +115,7 @@ export default function SessionsTab({ params }: { params: { id: string } }) {
             }}
             className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-black hover:bg-emerald-400 disabled:opacity-50"
           >
-            + New session
+            + Training session
           </button>
         )}
       </header>
@@ -191,7 +191,7 @@ export default function SessionsTab({ params }: { params: { id: string } }) {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-neutral-500">No sessions match this filter.</p>
+        <p className="text-sm text-neutral-500">No training sessions match this filter.</p>
       ) : (
         <ul className="space-y-3">
           {filtered.map(({ session: s, punches, peakVelocity }) => (

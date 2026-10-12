@@ -484,7 +484,7 @@ function PolarH10Config() {
           <li>Make sure Bluetooth is enabled on this device.</li>
           <li>Click <span className="text-white">Scan for Polar H10</span> above — the strap is discoverable for ~5 min after putting it on.</li>
           <li>Select your device from the list to pair it.</li>
-          <li>Start a new session — BLE streaming begins automatically with capture.</li>
+          <li>Start a training session — BLE streaming begins automatically with capture.</li>
         </ol>
       </div>
     </div>

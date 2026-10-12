@@ -20,9 +20,9 @@ function pageTitle(p: string): string {
   if (/\/gym-dashboard\/coaches/.test(p)) return "Coaches";
   if (/\/gym-dashboard\/gyms/.test(p)) return "Gyms";
   if (/\/gym-dashboard/.test(p)) return "Gym Dashboard";
-  if (/\/sessions\/new/.test(p)) return "New Session";
-  if (/\/sessions\//.test(p)) return "Session";
-  if (/\/sessions/.test(p)) return "Sessions";
+  if (/\/sessions\/new/.test(p)) return "Training Session";
+  if (/\/sessions\//.test(p)) return "Training Session";
+  if (/\/sessions/.test(p)) return "Training Sessions";
   if (/\/hrv/.test(p)) return "HRV";
   if (/\/observations/.test(p)) return "Notes";
   if (/\/medical/.test(p)) return "Medical";
@@ -138,7 +138,7 @@ export function MobileBottomBar() {
   if (fighterId) {
     tabs.push({
       id: "sessions",
-      label: "Sessions",
+      label: "Training",
       href: `/fighters/${fighterId}/sessions`,
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">

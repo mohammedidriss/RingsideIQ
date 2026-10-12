@@ -2,7 +2,7 @@
 
 /**
  * One dataset (ADR-013): its participants with their consent, and every recorded
- * take with what it captured. "Record take" is only offered when consent allows
+ * take with what it captured. "Record dataset session" is only offered when consent allows
  * it — the researcher recording himself (`self`) or a signed IRB consent. A take
  * is listed once its cameras have started; "Delete…" removes the takes ticked.
  *
@@ -180,7 +180,7 @@ export default function DatasetPage({ params }: { params: { id: string } }) {
                     title={p.may_record ? undefined : "Needs self or IRB-signed consent"}
                     className="rounded-xl bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
                   >
-                    {busy === p.fighter_id ? "Opening…" : "● Record take"}
+                    {busy === p.fighter_id ? "Opening…" : "● Record dataset session"}
                   </button>
                 )}
                 {blocked && (

@@ -514,7 +514,7 @@ export interface Take {
   fighter_name: string | null;
   /** "uploading": Stop & save pressed, the cameras' video is still arriving. */
   status: "recording" | "uploading" | "completed" | "discarded";
-  /** False for a draft: "Record take" opened it, the cameras haven't started. */
+  /** False for a draft: "Record dataset session" opened it, the cameras haven't started. */
   started: boolean;
   /** The protocol block this take records (one block per take), or null. */
   block: string | null;

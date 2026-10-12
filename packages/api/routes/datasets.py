@@ -89,7 +89,7 @@ class TakeOut(BaseModel):
     # recording · uploading (stopped; the cameras' video is still arriving) ·
     # completed · discarded
     status: str
-    # False for a draft: "Record take" opened it, but the cameras haven't started.
+    # False for a draft: "Record dataset session" opened it, but the cameras haven't started.
     started: bool = True
     # The protocol block this take records (one block per take), or None for an
     # older take that ran the whole protocol / a free recording.
@@ -138,7 +138,7 @@ class HrStatusOut(BaseModel):
 
 
 def _is_draft(take: DatasetTake) -> bool:
-    """Opened with "Record take" but the cameras never started: nothing recorded,
+    """Opened with "Record dataset session" but the cameras never started: nothing recorded,
     so it isn't part of the dataset (not listed, not counted, reused next time)."""
     if take.status != TakeStatusEnum.RECORDING:
         return False
@@ -330,7 +330,7 @@ def create_take(
 
     It's a draft until the cameras start: the phones and sensors connect to it, but
     it isn't in the dataset yet. The participant's unstarted draft is reused, so
-    opening "Record take" and leaving adds nothing."""
+    opening "Record dataset session" and leaving adds nothing."""
     d = repo.get(dataset_id)
     if d is None:
         raise HTTPException(status_code=404, detail="dataset not found")

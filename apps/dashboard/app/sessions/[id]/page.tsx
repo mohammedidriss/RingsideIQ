@@ -519,7 +519,7 @@ export default function SessionPage({ params }: { params: { id: string } }) {
         {/* Wraps its own items rather than squeezing the title when space is tight. */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div>
-            <h1 className="text-2xl font-semibold">Session</h1>
+            <h1 className="text-2xl font-semibold">{session.bout_id ? "Fight" : "Training session"}</h1>
             <p className="font-mono text-xs text-neutral-500" title={session.id}>
               {session.id.slice(0, 8)}
             </p>

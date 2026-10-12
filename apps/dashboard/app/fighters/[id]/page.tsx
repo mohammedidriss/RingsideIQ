@@ -243,7 +243,7 @@ export default function FighterPage({ params }: { params: { id: string } }) {
                 }}
                 className="rounded-xl bg-emerald-500 px-3 py-1.5 text-sm font-medium text-black hover:bg-emerald-400 disabled:opacity-50"
               >
-                New session
+                Training session
               </button>
             </div>
           )}

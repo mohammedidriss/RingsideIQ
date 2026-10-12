@@ -55,14 +55,14 @@ export default function BoutsPage() {
           <h1 className="text-2xl font-semibold">Bouts</h1>
           <p className="text-sm text-neutral-400">
             Two-fighter fights. For a single fighter, start a training session from the
-            fighter&apos;s Sessions page.
+            fighter&apos;s Training sessions page.
           </p>
         </div>
         <button
           onClick={() => setShowNew((s) => !s)}
           className="shrink-0 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-black hover:bg-emerald-400"
         >
-          {showNew ? "Cancel" : "+ New bout"}
+          {showNew ? "Cancel" : "+ Start fight"}
         </button>
       </header>
 
@@ -74,7 +74,7 @@ export default function BoutsPage() {
 
       {showNew && (
         <div className="card space-y-4">
-          <h2 className="text-lg font-semibold">New bout</h2>
+          <h2 className="text-lg font-semibold">Start a fight</h2>
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
@@ -102,13 +102,13 @@ export default function BoutsPage() {
             disabled={!canCreate}
             className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
           >
-            {creating ? "Creating…" : "Create bout"}
+            {creating ? "Starting…" : "Start fight"}
           </button>
         </div>
       )}
 
       {bouts.length === 0 ? (
-        <p className="text-sm text-neutral-500">No bouts yet — create one to record a fight.</p>
+        <p className="text-sm text-neutral-500">No fights yet — start one to record it.</p>
       ) : (
         <ul className="space-y-3">
           {bouts.map((b) => (

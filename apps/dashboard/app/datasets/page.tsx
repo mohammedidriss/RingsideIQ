@@ -69,7 +69,7 @@ export default function DatasetsPage() {
           onClick={() => setShowNew((v) => !v)}
           className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:bg-emerald-400"
         >
-          + New dataset
+          + Record dataset session
         </button>
       </header>
 

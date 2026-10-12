@@ -86,9 +86,9 @@ function NewSessionInner() {
 
   return (
     <main className="mx-auto max-w-xl space-y-6 p-8">
-      <h1 className="text-2xl font-semibold">New session</h1>
+      <h1 className="text-2xl font-semibold">Training session</h1>
       <p className="text-sm text-neutral-400">
-        Pick a fighter and we&apos;ll create a session. You can configure the
+        Pick a fighter and we&apos;ll create a training session. You can configure the
         round structure, source, and pose backend on the session page.
       </p>
 
@@ -132,7 +132,7 @@ function NewSessionInner() {
         disabled={!fighterId || busy}
         className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-emerald-900/30 hover:bg-emerald-400 disabled:opacity-50"
       >
-        {busy ? "Creating…" : "Create session →"}
+        {busy ? "Creating…" : "Start training session →"}
       </button>
     </main>
   );

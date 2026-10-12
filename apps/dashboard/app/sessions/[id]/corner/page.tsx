@@ -50,7 +50,9 @@ export default function CornerPage({ params }: { params: { id: string } }) {
           <div className="text-sm font-bold uppercase tracking-widest text-neutral-500">
             Gym Mode
           </div>
-          <div className="text-2xl font-semibold">Session {session.id.split("-")[0]}</div>
+          <div className="text-2xl font-semibold">
+            {session.bout_id ? "Fight" : "Training session"} {session.id.split("-")[0]}
+          </div>
         </div>
       </header>
 

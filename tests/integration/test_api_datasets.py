@@ -92,7 +92,7 @@ def test_takes_need_consent_and_only_one_researcher_records_himself(
 def test_record_take_adds_nothing_until_the_cameras_start(
     authed_client: TestClient, stores: dict[str, Path]
 ) -> None:
-    """Opening "Record take" is a draft the phones and sensors connect to; it joins
+    """Opening "Record dataset session" is a draft the phones and sensors connect to; it joins
     the dataset only when Start all cameras is pressed."""
     did = _dataset(authed_client)
     fid = _fighter(authed_client, "Mohamad")
@@ -103,7 +103,7 @@ def test_record_take_adds_nothing_until_the_cameras_start(
     assert take["status"] == "recording" and take["started"] is False
     assert authed_client.get(f"/v2/datasets/{did}").json()["takes"] == []
     assert authed_client.get("/v2/datasets").json()[0]["takes"] == 0
-    # leaving and pressing Record take again reopens the same draft — nothing piles up
+    # leaving and pressing Record dataset session again reopens the same draft — nothing piles up
     assert _take(authed_client, did, fid) == tid
     assert len(list((stores["datasets"] / did / "takes").iterdir())) == 1
 
@@ -113,7 +113,7 @@ def test_record_take_adds_nothing_until_the_cameras_start(
     listed = authed_client.get(f"/v2/datasets/{did}").json()["takes"]
     assert [t["id"] for t in listed] == [tid]
     assert authed_client.get("/v2/datasets").json()[0]["takes"] == 1
-    # the next Record take is a new take
+    # the next Record dataset session is a new take
     assert _take(authed_client, did, fid) != tid
 
 

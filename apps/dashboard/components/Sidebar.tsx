@@ -23,7 +23,7 @@ function extractCoachId(pathname: string): string | null {
 
 const FIGHTER_TABS: { slug: string; label: string; icon: string }[] = [
   { slug: "", label: "Dashboard", icon: "▦" },
-  { slug: "sessions", label: "Sessions", icon: "▷" },
+  { slug: "sessions", label: "Training sessions", icon: "▷" },
   { slug: "hrv", label: "HRV", icon: "♥" },
   { slug: "observations", label: "Observations", icon: "✎" },
   { slug: "medical", label: "Medical", icon: "✚" },
@@ -170,7 +170,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               );
             })}
 
-            {/* New session button (coaches only — admin manages accounts, not sessions) */}
+            {/* Training session button (coaches only — admin manages accounts, not sessions) */}
             {activeRole !== "fighter" && activeRole !== "gym_manager" && activeRole !== "admin" && (
               <button
                 onClick={async (e) => {
@@ -185,7 +185,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 }}
                 className="mt-2 flex w-full items-center justify-center rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-black hover:bg-emerald-400 disabled:opacity-50"
               >
-                + New session
+                + Training session
               </button>
             )}
           </>
