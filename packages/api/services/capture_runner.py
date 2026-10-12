@@ -214,7 +214,7 @@ def _run_capture(
     try:
         from pathlib import Path
 
-        import joblib  # type: ignore[import-not-found]
+        import joblib  # type: ignore[import-untyped, import-not-found, unused-ignore]
 
         model_path = Path("data/ml/punch_classifier_v1.pkl")
         if model_path.exists():
