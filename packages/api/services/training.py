@@ -29,7 +29,7 @@ import numpy as np
 
 from analyze import punch_model
 from analyze.punch_fusion import camera_punches
-from api.services import dataset_store
+from api.services import dataset_export
 from common import get_logger
 from contracts import Hand, Landmark, PoseFrame, WorldLandmark
 from studies import DetectedPunch, match_events
@@ -155,7 +155,7 @@ def model_dir(dataset_id: UUID) -> Path:
 
 
 def manifest_path(dataset_id: UUID) -> Path:
-    return dataset_store.dataset_dir(dataset_id) / "export" / "manifest.json"
+    return dataset_export.manifest_path(dataset_id)
 
 
 def _step(dataset_id: UUID, text: str) -> None:
@@ -166,7 +166,7 @@ def _step(dataset_id: UUID, text: str) -> None:
 def _stretches(dataset_id: UUID, manifest: dict[str, Any], split: str) -> list[Stretch]:
     """The split's stretches with their labels and every camera's pose (each
     camera's pose is read and smoothed once per take)."""
-    root = dataset_store.dataset_dir(dataset_id)
+    root = dataset_export.export_dir(dataset_id)  # the de-identified copy (ADR-014)
     takes = {t["take_id"]: t for t in manifest.get("takes", [])}
     cache: dict[str, tuple[list[tuple[float, Hand]], dict[str, Any], dict[str, Pose]]] = {}
     out: list[Stretch] = []
@@ -313,7 +313,7 @@ def run(dataset_id: UUID) -> dict[str, Any]:
         "threshold": threshold,
         "data": {
             "takes": len({s.take_id for s in train + test}),
-            "fighters": len({t["fighter_id"] for t in manifest.get("takes", [])}),
+            "fighters": len({t["participant"] for t in manifest.get("takes", [])}),
             "train_stretches": len(train),
             "test_stretches": len(test),
             "train_punches": sum(len(s.labels) for s in train),

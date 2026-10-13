@@ -9,6 +9,10 @@
  * With a protocol, a participant is recorded one category per take — jab, lead
  * hook, 1-2, free shadowboxing, … — picked from the category grid, each showing
  * how often it's been recorded. A take records that category only.
+ *
+ * Each participant has a code (F-0001, ADR-014): the dataset's files and exports
+ * carry only the code; the name shows here, from the database. "Withdraw…"
+ * deletes everything recorded for a code and logs the counts.
  */
 
 import Link from "next/link";
@@ -23,6 +27,7 @@ import {
   type DatasetDetail,
   type DatasetExport,
   type DatasetParticipant,
+  type DeletionLogEntry,
   type Fighter,
   type Take,
 } from "@/lib/api";
@@ -62,6 +67,9 @@ export default function DatasetPage({ params }: { params: { id: string } }) {
   const [plan, setPlan] = useState<ProtocolBlockSpec[]>([]);
   // Delete: null = off; a set = picking takes (empty to start).
   const [picked, setPicked] = useState<Set<string> | null>(null);
+  // Withdraw: the participant being confirmed, then what was deleted.
+  const [withdrawing, setWithdrawing] = useState<DatasetParticipant | null>(null);
+  const [withdrawn, setWithdrawn] = useState<DeletionLogEntry | null>(null);
 
   const load = () =>
     api
@@ -85,6 +93,21 @@ export default function DatasetPage({ params }: { params: { id: string } }) {
       router.push(`/datasets/${params.id}/takes/${take.id}`);
     } catch (e) {
       setErr(errText(e));
+      setBusy(null);
+    }
+  };
+
+  const withdraw = async (p: DatasetParticipant) => {
+    if (!p.code) return;
+    setBusy(p.fighter_id);
+    setErr(null);
+    try {
+      setWithdrawn(await api.withdrawParticipant(params.id, p.code));
+      setWithdrawing(null);
+      await load();
+    } catch (e) {
+      setErr(errText(e));
+    } finally {
       setBusy(null);
     }
   };
@@ -155,7 +178,17 @@ export default function DatasetPage({ params }: { params: { id: string } }) {
             {ds.participants.map((p) => (
               <div key={p.fighter_id} className="flex flex-wrap items-center gap-3 py-2.5">
                 <div className="min-w-[10rem] flex-1">
-                  <div className="font-medium">{p.name}</div>
+                  <div className="flex items-center gap-2 font-medium">
+                    {p.code && (
+                      <span
+                        className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-xs text-neutral-200"
+                        title="The dataset's files and exports name this participant by code only"
+                      >
+                        {p.code}
+                      </span>
+                    )}
+                    {p.name}
+                  </div>
                   <div className="text-xs text-neutral-500">
                     {p.stance ?? "stance unknown"} · {p.takes} take{p.takes === 1 ? "" : "s"}
                     {p.irb_ref && <> · IRB {p.irb_ref}</>}
@@ -173,6 +206,18 @@ export default function DatasetPage({ params }: { params: { id: string } }) {
                     </option>
                   ))}
                 </select>
+                {p.code && p.consent !== "withdrawn" && (
+                  <button
+                    onClick={() => {
+                      setWithdrawn(null);
+                      setWithdrawing(p);
+                    }}
+                    disabled={busy !== null}
+                    className="rounded-xl border border-red-500/30 px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-40"
+                  >
+                    Withdraw…
+                  </button>
+                )}
                 {!blocked && (
                   <button
                     onClick={() => record(p.fighter_id)}
@@ -217,6 +262,41 @@ export default function DatasetPage({ params }: { params: { id: string } }) {
               </div>
             ))}
           </div>
+        )}
+        {withdrawing && (
+          <div className="rounded-xl border border-red-500/40 bg-red-950/30 p-3 text-sm text-red-100">
+            <p>
+              Withdraw <strong className="font-mono">{withdrawing.code}</strong> ({withdrawing.name})?
+              This deletes all {withdrawing.takes} of their take{withdrawing.takes === 1 ? "" : "s"} —
+              video, wrist and heart data, labels — and removes them from the training export.
+              They can&apos;t be recorded again. Models already trained aren&apos;t changed. This
+              can&apos;t be undone.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => withdraw(withdrawing)}
+                disabled={busy !== null}
+                className="rounded-xl bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+              >
+                {busy === withdrawing.fighter_id ? "Deleting…" : `Withdraw ${withdrawing.code} and delete`}
+              </button>
+              <button
+                onClick={() => setWithdrawing(null)}
+                disabled={busy !== null}
+                className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-neutral-300 hover:bg-white/5"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {withdrawn && (
+          <p className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-neutral-300">
+            Withdrew <span className="font-mono">{withdrawn.participant}</span>: deleted{" "}
+            {withdrawn.takes} take{withdrawn.takes === 1 ? "" : "s"} ({withdrawn.clips} video clip
+            {withdrawn.clips === 1 ? "" : "s"}, {withdrawn.labels} labels) and{" "}
+            {withdrawn.exported_takes} from the export. Logged with the code, date and counts only.
+          </p>
         )}
         <AddParticipant
           fighters={fighters.filter((f) => !ds.participants.some((p) => p.fighter_id === f.id))}
@@ -605,6 +685,10 @@ function ExportButton({ datasetId, disabled }: { datasetId: string; disabled: bo
               split: <strong className="text-neutral-100">{result.split_strategy}</strong>
             </span>
           </div>
+          <p className="mt-1 text-neutral-400">
+            De-identified copy: participants by code only, checked for names and contact
+            details. Videos are left out until they&apos;re face-blurred.
+          </p>
           <p className="mt-1 break-all font-mono text-[10px] text-neutral-500">{result.path}</p>
           {result.excluded.length > 0 && (
             <p className="mt-2 text-neutral-400">

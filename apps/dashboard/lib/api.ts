@@ -485,8 +485,24 @@ export interface DatasetSummary {
   completed_takes: number;
 }
 
+/** One line of a dataset's deletion log — the code, when, and counts; no data. */
+export interface DeletionLogEntry {
+  at: string;
+  action: string;
+  participant: string;
+  takes: number;
+  clips: number;
+  imu_rows: number;
+  hr_rows: number;
+  labels: number;
+  exported_takes: number;
+  trained_models: string;
+}
+
 export interface DatasetParticipant {
   fighter_id: string;
+  /** How the dataset's files and exports name them (F-0001) — never by name. */
+  code: string | null;
   name: string;
   stance: string | null;
   consent: Consent;
@@ -1299,6 +1315,15 @@ export const api = {
   discardTake: (id: string) => req<Take>(`/v2/takes/${id}/discard`, { method: "POST" }),
   /** Delete a take for good (row, folder, clips) — e.g. a recording that went wrong. */
   deleteTake: (id: string) => req<void>(`/v2/takes/${id}`, { method: "DELETE" }),
+  /** Withdraw a participant: deletes all their takes and their exported copies,
+   *  marks them withdrawn, and logs counts only. Can't be undone. */
+  withdrawParticipant: (datasetId: string, code: string) =>
+    req<DeletionLogEntry>(
+      `/v2/datasets/${datasetId}/participants/${encodeURIComponent(code)}/withdraw`,
+      { method: "POST" },
+    ),
+  deletionLog: (datasetId: string) =>
+    req<DeletionLogEntry[]>(`/v2/datasets/${datasetId}/deletions`),
   takeCrossCheck: (id: string) => req<TakeCrossCheck | null>(`/v2/takes/${id}/cross-check`),
   /** `recorded: true` = the session log: only sessions where the camera recorded
    *  (opened-and-left sessions are hidden, then purged after 10 min). */

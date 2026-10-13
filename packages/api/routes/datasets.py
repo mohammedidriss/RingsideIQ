@@ -35,6 +35,7 @@ from api.services import (
     cross_check,
     dataset_protocol,
     dataset_store,
+    dataset_withdraw,
     hrv_runner,
     imu_devices,
     imu_runner,
@@ -67,7 +68,8 @@ def dataset_repo(db: DBSession = Depends(db_session)) -> DatasetRepo:
 
 class ParticipantOut(BaseModel):
     fighter_id: UUID
-    name: str
+    code: str | None = None  # how the dataset's files and exports name them (ADR-014)
+    name: str  # shown to the researcher here; never written into the dataset
     stance: str | None = None
     consent: str
     may_record: bool
@@ -268,11 +270,12 @@ def get_dataset(
             for key in _recorded_blocks(t.id):
                 per[key] = per.get(key, 0) + 1
     participants = []
-    for p in repo.participants(dataset_id):
+    for p in repo.ensure_codes(dataset_id):
         f = fighters.get(p.fighter_id)
         participants.append(
             ParticipantOut(
                 fighter_id=p.fighter_id,
+                code=p.code,
                 name=f.name if f else "(deleted fighter)",
                 stance=str(f.stance) if f and f.stance else None,
                 consent=str(p.consent),
@@ -314,6 +317,50 @@ def set_participant(
     return get_dataset(dataset_id, repo, fighters)
 
 
+class WithdrawOut(BaseModel):
+    """One line of the dataset's deletion log: the code, when, and counts — no data."""
+
+    at: str
+    action: str
+    participant: str
+    takes: int
+    clips: int
+    imu_rows: int
+    hr_rows: int
+    labels: int
+    exported_takes: int
+    trained_models: str
+
+
+@router.post("/datasets/{dataset_id}/participants/{code}/withdraw", response_model=WithdrawOut)
+def withdraw_participant(
+    dataset_id: UUID, code: str, repo: DatasetRepo = Depends(dataset_repo)
+) -> WithdrawOut:
+    """Withdraw a participant: delete all their takes (video, sensor data, labels)
+    and their copies in the export, mark them withdrawn so they can't be recorded
+    again, and log what went. Trained models are not changed. Can't be undone."""
+    if repo.get(dataset_id) is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    p = repo.participant_by_code(dataset_id, code)
+    if p is None or p.code is None:
+        raise HTTPException(status_code=404, detail=f"no participant {code} in this dataset")
+    takes = [t for t in repo.takes(dataset_id) if t.fighter_id == p.fighter_id]
+    for t in takes:
+        _release_capture(t.id, discard=True)
+    entry = dataset_withdraw.delete_files(dataset_id, p.code, [t.id for t in takes])
+    for t in takes:
+        repo.delete_take(t.id)
+    repo.withdraw_participant(p)
+    return WithdrawOut(**entry)
+
+
+@router.get("/datasets/{dataset_id}/deletions", response_model=list[WithdrawOut])
+def deletion_log(dataset_id: UUID, repo: DatasetRepo = Depends(dataset_repo)) -> list[WithdrawOut]:
+    if repo.get(dataset_id) is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return [WithdrawOut(**e) for e in dataset_withdraw.read_log(dataset_id)]
+
+
 # --------------------------------------------------------------------------
 # Takes
 # --------------------------------------------------------------------------
@@ -352,16 +399,18 @@ def create_take(
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     fighter = fighters.get(take.fighter_id)
+    participant = next(
+        (p for p in repo.ensure_codes(dataset_id) if p.fighter_id == take.fighter_id), None
+    )
+    # Names stay in the database: the take's files carry the participant code (ADR-014).
     dataset_store.create_take_dir(
         dataset_id,
         take.id,
         {
             "take_id": str(take.id),
             "dataset_id": str(dataset_id),
-            "dataset": d.name,
             "protocol": d.protocol,
-            "fighter_id": str(take.fighter_id),
-            "fighter": fighter.name if fighter else None,
+            "participant": participant.code if participant else None,
             "stance": str(fighter.stance) if fighter and fighter.stance else None,
             "status": "recording",
             "created_at": take.started_at.isoformat(),

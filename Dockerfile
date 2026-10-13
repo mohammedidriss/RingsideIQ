@@ -1,8 +1,8 @@
-# ── Alion API — Railway deployment ────────────────────────────────────────────
+# ── Alion API — container image (runs on your own machines; ADR-015) ──────────
 # Multi-stage build: install deps with uv, then copy into a slim runtime image.
 #
 # CV / camera features (OpenCV VideoCapture, YOLOv8) are NOT available in this
-# container — live video capture runs on the coach's laptop, not in the cloud.
+# container — live video capture runs on the coach's laptop.
 # All data-management endpoints (fighters, sessions, HRV, etc.) work normally.
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ COPY packages/ packages/
 COPY migrations/ migrations/
 COPY alembic.ini ./
 
-# Pre-create the data directory (Railway volume mounts here)
+# Pre-create the data directory (mount a local, encrypted volume here)
 RUN mkdir -p /app/data/photos
 
 # ── Runtime ────────────────────────────────────────────────────────────────────

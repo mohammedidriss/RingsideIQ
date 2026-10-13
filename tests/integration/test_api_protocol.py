@@ -249,13 +249,22 @@ def test_pilot_export_trains_on_scripted_blocks_and_tests_on_free(
     assert [s["block"] for s in m["splits"]["train"]] == ["jab", "negatives"]
     assert [s["block"] for s in m["splits"]["test"]] == ["free"]
     take = m["takes"][0]
-    assert take["video"][0]["path"] == "video/dev1.webm" and take["imu"] == "imu.csv"
-    assert take["labels"] == {"path": "labels.json", "count": 3, "reviewed": False}
+    assert take["participant"] == "F-0001" and "fighter_id" not in take
+    assert take["cameras"] == [{"camera": "dev1", "start_offset_ms": None}]
+    assert take["video"] == [] and take["imu"] == "imu.csv"
+    assert take["labels"]["count"] == 3 and take["labels"]["reviewed"] is False
     assert {"take_id": unfinished, "reason": "recording"} in m["excluded"]
     assert any("pilot split" in w for w in m["warnings"])
     assert any("unreviewed" in w for w in m["warnings"])
     assert json.loads(Path(m["path"]).read_text())["takes"] == m["takes"]
-    assert "name" not in json.dumps(m["takes"])  # fighters by id only
+    # The export is a self-contained, de-identified copy next to the manifest:
+    # the take's data under its code, no video (faces) and no name anywhere.
+    copy = Path(m["path"]).parent / take["folder"]
+    assert (copy / "imu.csv").exists() and (copy / "labels.json").exists()
+    assert json.loads((copy / "take.json").read_text())["participant"] == "F-0001"
+    assert not [p for p in copy.rglob("*") if p.suffix in (".webm", ".mp4")]
+    text = "".join(p.read_text() for p in copy.parent.parent.rglob("*.json"))
+    assert "F-orthodox" not in text  # the fighter's name
 
 
 def test_three_fighters_split_by_person_so_nobody_is_in_train_and_test(
@@ -272,7 +281,7 @@ def test_three_fighters_split_by_person_so_nobody_is_in_train_and_test(
 
     m = authed_client.post(f"/v2/datasets/{did}/export").json()
     assert m["split_strategy"] == "by_fighter" and m["counts"]["fighters"] == 4
-    fighter_of = {t["take_id"]: t["fighter_id"] for t in m["takes"]}
+    fighter_of = {t["take_id"]: t["participant"] for t in m["takes"]}
     people = {name: {fighter_of[s["take_id"]] for s in segs} for name, segs in m["splits"].items()}
     assert people["test"] and people["val"] and people["train"]
     assert not (people["train"] & people["test"]) and not (people["train"] & people["val"])

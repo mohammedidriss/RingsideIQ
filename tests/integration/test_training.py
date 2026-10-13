@@ -26,9 +26,9 @@ def stores(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     yield tmp_path
 
 
-def _export(did: str, fid: str) -> None:
-    """A dataset export: three takes to train on, one to test on, each one camera
-    of synthetic pose with labelled punches."""
+def _export(did: str) -> None:
+    """A dataset export (the de-identified copy under export/): three takes to train
+    on, one to test on, each one camera of synthetic pose with labelled punches."""
     from api.services import dataset_store
     from capture.cv.writer import write_pose_parquet
 
@@ -36,7 +36,7 @@ def _export(did: str, fid: str) -> None:
     takes, splits = [], {"train": [], "val": [], "test": []}
     for k in range(4):
         tid = str(uuid4())
-        folder = root / "takes" / tid
+        folder = root / "export" / "takes" / tid
         (folder / "pose").mkdir(parents=True)
         punches = schedule(40, 1500 + 100 * k)
         write_pose_parquet(folder / "pose" / "cam1.parquet", synthetic(40, punches, seed=k))
@@ -46,7 +46,7 @@ def _export(did: str, fid: str) -> None:
         takes.append(
             {
                 "take_id": tid,
-                "fighter_id": fid,
+                "participant": "F-0001",
                 "folder": f"takes/{tid}",
                 "pose": ["pose/cam1.parquet"],
                 "labels": {"path": "labels.json", "count": len(punches), "reviewed": False},
@@ -54,7 +54,7 @@ def _export(did: str, fid: str) -> None:
         )
         split = "test" if k == 3 else "train"
         splits[split].append({"take_id": tid, "t_start_ms": 0, "t_end_ms": 40_000, "block": "jab"})
-    (root / "export").mkdir(parents=True)
+    (root / "export").mkdir(parents=True, exist_ok=True)
     (root / "export" / "manifest.json").write_text(
         json.dumps(
             {
@@ -76,11 +76,10 @@ def test_training_scores_the_new_counter_against_the_current_one(
     did = authed_client.post("/v2/datasets", json={"name": "RQ2", "protocol": "rq2-v1"}).json()[
         "id"
     ]
-    fid = authed_client.post("/fighters", json={"name": "Mohamad"}).json()["id"]
     # nothing exported yet
     assert authed_client.post(f"/v2/datasets/{did}/train").status_code == 409
 
-    _export(did, fid)
+    _export(did)
     started = authed_client.post(f"/v2/datasets/{did}/train")
     assert started.status_code == 202 and started.json()["running"] is True
     # (the background thread is off in tests: run it here, as the thread would)

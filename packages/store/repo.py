@@ -9,6 +9,7 @@ from sqlmodel import Session as DBSession
 from sqlmodel import select
 
 from store.models import (
+    PARTICIPANT_CODE_PREFIX,
     Allergy,
     AllergyCreate,
     Bout,
@@ -58,6 +59,7 @@ from store.models import (
     UserCreate,
     WeighIn,
     WeighInCreate,
+    participant_code,
 )
 
 
@@ -1160,7 +1162,9 @@ class DatasetRepo:
                 raise ValueError("another participant is already the self-recording researcher")
         row = self.participant(dataset_id, data.fighter_id)
         if row is None:
-            row = DatasetParticipant(dataset_id=dataset_id, **data.model_dump())
+            row = DatasetParticipant(
+                dataset_id=dataset_id, code=self._next_code(dataset_id), **data.model_dump()
+            )
         else:
             for k, v in data.model_dump().items():
                 setattr(row, k, v)
@@ -1168,6 +1172,39 @@ class DatasetRepo:
         self._session.commit()
         self._session.refresh(row)
         return row
+
+    def _next_code(self, dataset_id: UUID) -> str:
+        taken = [
+            int(p.code[len(PARTICIPANT_CODE_PREFIX) :])
+            for p in self.participants(dataset_id)
+            if p.code and p.code[len(PARTICIPANT_CODE_PREFIX) :].isdigit()
+        ]
+        return participant_code(max(taken, default=0) + 1)
+
+    def ensure_codes(self, dataset_id: UUID) -> list[DatasetParticipant]:
+        """The dataset's participants, giving a code to any that lack one (the
+        migration numbers existing ones; this covers a database made without it)."""
+        rows = sorted(self.participants(dataset_id), key=lambda p: p.created_at)
+        missing = [p for p in rows if not p.code]
+        for p in missing:
+            p.code = self._next_code(dataset_id)
+            self._session.add(p)
+            self._session.commit()
+        return rows
+
+    def participant_by_code(self, dataset_id: UUID, code: str) -> DatasetParticipant | None:
+        stmt = select(DatasetParticipant).where(
+            DatasetParticipant.dataset_id == dataset_id,
+            DatasetParticipant.code == code.strip().upper(),
+        )
+        return self._session.exec(stmt).first()
+
+    def withdraw_participant(self, participant: DatasetParticipant) -> None:
+        """Mark them withdrawn (their takes are deleted by the caller): they can't be
+        recorded again, and their code stays taken so it's never reused."""
+        participant.consent = ConsentEnum.WITHDRAWN
+        self._session.add(participant)
+        self._session.commit()
 
     # -- takes --
     def create_take(self, dataset_id: UUID, fighter_id: UUID) -> DatasetTake:

@@ -1440,12 +1440,26 @@ class DatasetRead(SQLModel):
     created_at: UtcDatetime
 
 
+PARTICIPANT_CODE_PREFIX = "F-"
+
+
+def participant_code(n: int) -> str:
+    """The n-th participant's code in a dataset: F-0001, F-0002, …"""
+    return f"{PARTICIPANT_CODE_PREFIX}{n:04d}"
+
+
 class DatasetParticipant(SQLModel, table=True):
     __tablename__ = "dataset_participant"
-    __table_args__ = (sa.UniqueConstraint("dataset_id", "fighter_id"),)
+    __table_args__ = (
+        sa.UniqueConstraint("dataset_id", "fighter_id"),
+        sa.Index("ix_dataset_participant_code", "dataset_id", "code", unique=True),
+    )
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     dataset_id: UUID = Field(foreign_key="dataset.id", index=True)
     fighter_id: UUID = Field(foreign_key="fighter.id", index=True)
+    # The participant's code in this dataset (ADR-014): everything the dataset stores
+    # or exports names them by this, never by name. Assigned when they're added.
+    code: str | None = Field(default=None, max_length=12)
     consent: ConsentEnum = Field(
         default=ConsentEnum.PENDING, sa_column=sa.Column(sa.String, nullable=False)
     )

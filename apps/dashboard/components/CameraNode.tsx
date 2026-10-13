@@ -25,8 +25,9 @@ const VIDEO_BPS = 2_500_000;
  * Open the camera, falling back to simpler requests when the preferred one fails.
  * A phone asks for its back camera at 4:3 (the full sensor, like the native camera
  * app); the laptop webcam keeps 16:9. Some Android phones refuse a specific size
- * with "Could not start video source", and a busy or blocked microphone fails the
- * whole request — so each step asks for less, ending at "any camera, no audio".
+ * with "Could not start video source", so each step asks for less, ending at "any
+ * camera". Video only: sound is never captured (ADR-014) — the microphone isn't
+ * even asked for, so no clip can carry voices.
  */
 async function openCamera(laptop: boolean, deviceId?: string | null): Promise<MediaStream> {
   const back = { facingMode: { ideal: "environment" } };
@@ -35,19 +36,17 @@ async function openCamera(laptop: boolean, deviceId?: string | null): Promise<Me
     ? [
         {
           video: { ...pick, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-          audio: true,
+          audio: false,
         },
-        { video: deviceId ? pick : true, audio: true },
-        { video: deviceId ? pick : true },
+        { video: deviceId ? pick : true, audio: false },
       ]
     : [
         {
           video: { ...back, aspectRatio: { ideal: 4 / 3 }, width: { ideal: 1280 }, height: { ideal: 960 } },
-          audio: true,
+          audio: false,
         },
-        { video: back, audio: true },
-        { video: back }, // microphone busy or blocked — video still works
-        { video: true },
+        { video: back, audio: false },
+        { video: true, audio: false },
       ];
   let last: unknown = null;
   for (const c of attempts) {
@@ -429,9 +428,11 @@ export function CameraNode({
           const mime = ["video/webm;codecs=vp9", "video/webm", "video/mp4"].find((m) =>
             MediaRecorder.isTypeSupported?.(m),
           );
+          // Record the video track alone, so a clip can never carry sound (ADR-014).
+          const video = new MediaStream(streamRef.current.getVideoTracks());
           const rec = mime
-            ? new MediaRecorder(streamRef.current, { mimeType: mime, videoBitsPerSecond: VIDEO_BPS })
-            : new MediaRecorder(streamRef.current, { videoBitsPerSecond: VIDEO_BPS });
+            ? new MediaRecorder(video, { mimeType: mime, videoBitsPerSecond: VIDEO_BPS })
+            : new MediaRecorder(video, { videoBitsPerSecond: VIDEO_BPS });
           chunksRef.current = [];
           rec.ondataavailable = (e) => {
             if (e.data.size) chunksRef.current.push(e.data);

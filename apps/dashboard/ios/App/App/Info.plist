@@ -49,7 +49,5 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Alion uses your camera to analyse boxing technique and detect punches in real time.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Alion may access the microphone when recording video sessions.</string>
 </dict>
 </plist>
