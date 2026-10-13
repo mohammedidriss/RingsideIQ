@@ -35,6 +35,7 @@ data/capture/
 models/**/weights.pt
 models/**/*.bin
 models/**/*.task
+models/**/*.onnx
 
 # Environment
 .env

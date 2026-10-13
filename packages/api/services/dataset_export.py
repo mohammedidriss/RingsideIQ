@@ -15,12 +15,15 @@ manifest, so the export stands on its own and holds nothing but the data:
     export/takes/{take_id}/labels.json
     export/takes/{take_id}/imu.csv, hr.csv
     export/takes/{take_id}/pose/{camera}.parquet
+    export/takes/{take_id}/video/{camera}.mp4         faces blurred, no sound, no metadata
+    export/takes/{take_id}/video/{camera}.frames.csv  each frame's t_ms on the take timeline
 
-Video isn't copied: it shows faces, and the face-blurred copies come with the
-next step of ADR-014. Before the copy replaces the previous export, every file
-is checked for personal data (`common.privacy`) — field names like `name` or
-`email`, and the participants' own names and emails anywhere in the text. If
-anything is found the export is refused and the previous one stays.
+Video goes in only as its face-blurred copy (`video_blur`); a clip whose copy
+isn't ready — still blurring, or it couldn't be blurred safely — is left out and
+listed, never exported as recorded. Before the copy replaces the previous export,
+every file is checked for personal data (`common.privacy`) — field names like
+`name` or `email`, and the participants' own names and emails anywhere in the
+text. If anything is found the export is refused and the previous one stays.
 
 Splits follow docs/studies/RQ2_DATASET_PROTOCOL.md §7:
 
@@ -49,7 +52,7 @@ from typing import Any
 from uuid import UUID
 
 from api.services import dataset_protocol as proto
-from api.services import dataset_store
+from api.services import dataset_store, video_blur
 from common.privacy import PersonalDataError, find_personal_data
 
 BY_FIGHTER_MIN = 3
@@ -101,6 +104,22 @@ def _take_entry(ref: TakeRef, folder: Path) -> dict[str, Any]:
         for b in data["blocks"]
         if not b.get("discarded") and b.get("t_end_ms") is not None
     ]
+    clips = dataset_store.clips(folder)
+    states = [video_blur.clip_state(folder, c) for c in clips]
+    video = [
+        {
+            "camera": c["device_id"],
+            "path": f"video/{c['device_id']}.mp4",
+            "frame_times": f"video/{c['device_id']}.frames.csv",
+            "start_offset_ms": c["start_offset_ms"],
+            "blur": {
+                k: st["stats"].get(k)
+                for k in ("frames", "face_from_pose", "face_from_detector", "whole_frame")
+            },
+        }
+        for c, st in zip(clips, states, strict=True)
+        if st["status"] == "ready"
+    ]
     return {
         "take_id": str(ref.take_id),
         "participant": ref.participant,
@@ -108,12 +127,17 @@ def _take_entry(ref: TakeRef, folder: Path) -> dict[str, Any]:
         "duration_ms": ref.duration_ms,
         "folder": f"takes/{ref.take_id}",
         # Each camera's clip start on the take timeline (its pose file is already
-        # on that timeline). Videos are left out until they're face-blurred.
+        # on that timeline).
         "cameras": [
-            {"camera": c["device_id"], "start_offset_ms": c["start_offset_ms"]}
-            for c in dataset_store.clips(folder)
+            {"camera": c["device_id"], "start_offset_ms": c["start_offset_ms"]} for c in clips
         ],
-        "video": [],
+        # Only face-blurred copies; the rest are listed in video_left_out.
+        "video": video,
+        "video_left_out": [
+            {"camera": st["camera"], "reason": st.get("error") or "not blurred yet"}
+            for st in states
+            if st["status"] != "ready"
+        ],
         "pose": sorted(f"pose/{p.name}" for p in (folder / "pose").glob("*.parquet")),
         "imu": "imu.csv" if (folder / "imu.csv").exists() else None,
         "hr": "hr.csv" if (folder / "hr.csv").exists() else None,
@@ -188,6 +212,12 @@ def build_manifest(
         tid = e["take_id"][:8]
         if not e["cameras"]:
             warnings.append(f"take {tid}: no video")
+        for v in e["video_left_out"]:
+            if v["reason"] != "not blurred yet":
+                warnings.append(
+                    f"take {tid}: {v['camera']} video left out — couldn't be face-blurred "
+                    f"safely ({v['reason']})"
+                )
         if e["imu"] is None:
             warnings.append(f"take {tid}: no wrist-sensor data — nothing to label from")
         if e["labels"] is None:
@@ -204,6 +234,15 @@ def build_manifest(
                 f"take {tid}: wrist sensors look swapped ({'; '.join(e['swap_evidence'])}) "
                 "— check it and use Swap wrists on the take"
             )
+
+    waiting = sum(
+        1 for e in entries for v in e["video_left_out"] if v["reason"] == "not blurred yet"
+    )
+    if waiting:
+        warnings.append(
+            f"{waiting} video(s) left out until they're face-blurred — blurring runs in the "
+            "background; export again when it's done"
+        )
 
     n_people = len({e["participant"] for e in entries})
     if n_people >= BY_FIGHTER_MIN:
@@ -245,6 +284,14 @@ def _copy_take(entry: dict[str, Any], src: Path, dst: Path) -> None:
     labels = (entry["labels"] or {}).get("path")
     if labels and (src / labels).exists():
         shutil.copy2(src / labels, dst / labels)
+    blurred = video_blur.take_blur_dir(src)
+    for v in entry["video"]:
+        (dst / "video").mkdir(exist_ok=True)
+        for name in (f"{v['camera']}.mp4", f"{v['camera']}.frames.csv"):
+            try:
+                os.link(blurred / name, dst / "video" / name)
+            except OSError:
+                shutil.copy2(blurred / name, dst / "video" / name)
     # The data files are hard-linked, not copied: the export costs no extra disk
     # (pose alone is ~800 MB for 19 takes). Only completed takes are exported, and
     # nothing appends to their sensor files after that; these files carry numbers

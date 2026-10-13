@@ -33,6 +33,7 @@ from api.routes.live import LiveHeart, LiveOut, hr_zone, max_hr_for
 from api.routes.sessions import CrossCheckCamera, CrossCheckSummary
 from api.services import (
     cross_check,
+    dataset_export,
     dataset_protocol,
     dataset_store,
     dataset_withdraw,
@@ -40,6 +41,7 @@ from api.services import (
     imu_devices,
     imu_runner,
     pose_backfill,
+    video_blur,
 )
 from store import (
     ConsentEnum,
@@ -325,6 +327,7 @@ class WithdrawOut(BaseModel):
     participant: str
     takes: int
     clips: int
+    blurred_clips: int = 0
     imu_rows: int
     hr_rows: int
     labels: int
@@ -439,12 +442,15 @@ def get_take(
 @router.delete("/takes/{take_id}", status_code=204)
 def delete_take(take_id: UUID, repo: DatasetRepo = Depends(dataset_repo)) -> None:
     """Delete a take for good — the coach's "Delete" on a recording that went wrong:
-    the cameras drop their clips, the sensors stop, and the row and folder go."""
+    the cameras drop their clips, the sensors stop, and the row and folder go —
+    with its face-blurred copies and its copy in the export."""
     take = _get_take(take_id, repo)
     _release_capture(take_id, discard=True)
     folder = dataset_store.take_dir(take_id)
     if folder is not None:
+        video_blur.delete_take(folder)
         shutil.rmtree(folder, ignore_errors=True)
+    dataset_export.drop_takes(take.dataset_id, {str(take_id)})
     repo.delete_take(take.id)
 
 

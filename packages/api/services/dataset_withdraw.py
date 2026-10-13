@@ -1,7 +1,8 @@
 """Withdraw a participant from a dataset (ADR-014).
 
 Deletes everything the dataset holds for one participant code — every take's
-folder (video, pose, wrist and heart data, labels) and its copy in the export,
+folder (video, pose, wrist and heart data, labels), its face-blurred copies and
+its copy in the export,
 whose manifest and splits drop it — and appends one line to the dataset's
 deletion log: the code, when, and how much went. The log holds counts only, no
 data. Models already trained are not changed (the consent form says so); the
@@ -19,7 +20,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from api.services import dataset_export, dataset_store
+from api.services import dataset_export, dataset_store, video_blur
 
 LOG = "deletions.jsonl"
 
@@ -30,7 +31,7 @@ def log_path(dataset_id: UUID) -> Path:
 
 def delete_files(dataset_id: UUID, code: str, take_ids: list[UUID]) -> dict[str, Any]:
     """Delete the takes' folders and their exported copies; log and return the counts."""
-    counts = {"takes": 0, "clips": 0, "imu_rows": 0, "hr_rows": 0, "labels": 0}
+    counts = {"takes": 0, "clips": 0, "blurred_clips": 0, "imu_rows": 0, "hr_rows": 0, "labels": 0}
     for tid in take_ids:
         counts["takes"] += 1
         folder = dataset_store.take_dir(tid)
@@ -41,6 +42,7 @@ def delete_files(dataset_id: UUID, code: str, take_ids: list[UUID]) -> dict[str,
         counts["imu_rows"] += s["imu_rows"]
         counts["hr_rows"] += s["hr_rows"]
         counts["labels"] += s["labels"] or 0
+        counts["blurred_clips"] += video_blur.delete_take(folder)
         shutil.rmtree(folder)
     exported = dataset_export.drop_takes(dataset_id, {str(t) for t in take_ids})
     entry = {

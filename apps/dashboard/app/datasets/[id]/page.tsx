@@ -17,7 +17,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { BlurPanel } from "@/components/BlurPanel";
 import { TrainingCard } from "@/components/TrainingCard";
 import { categoryLength } from "@/lib/categories";
 import {
@@ -641,23 +642,29 @@ function DeleteTakes({
   );
 }
 
-/** Writes the training manifest (data/datasets/{id}/export/manifest.json) and shows
- *  what went in: counts, the split strategy, and anything excluded or suspicious. */
+/** Writes the de-identified training copy (data/datasets/{id}/export/) and shows
+ *  what went in: counts, the split strategy, and anything excluded or suspicious.
+ *  Videos go in only face-blurred; an export starts blurring any that aren't yet,
+ *  and exports again by itself when that's done. */
 function ExportButton({ datasetId, disabled }: { datasetId: string; disabled: boolean }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<DatasetExport | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const run = async () => {
+  const [watch, setWatch] = useState(0);
+  const run = useCallback(async () => {
     setBusy(true);
     setErr(null);
     try {
       setResult(await api.datasetExport(datasetId));
+      setWatch((n) => n + 1);
     } catch (e) {
       setErr(errText(e));
     } finally {
       setBusy(false);
     }
-  };
+  }, [datasetId]);
+  const videos = result ? result.takes.reduce((n, t) => n + t.video.length, 0) : 0;
+  const leftOut = result ? result.takes.reduce((n, t) => n + t.video_left_out.length, 0) : 0;
   return (
     <div className="w-full sm:w-auto">
       <button
@@ -687,7 +694,8 @@ function ExportButton({ datasetId, disabled }: { datasetId: string; disabled: bo
           </div>
           <p className="mt-1 text-neutral-400">
             De-identified copy: participants by code only, checked for names and contact
-            details. Videos are left out until they&apos;re face-blurred.
+            details. {videos} face-blurred video{videos === 1 ? "" : "s"} in
+            {leftOut > 0 && `, ${leftOut} left out until blurred`}.
           </p>
           <p className="mt-1 break-all font-mono text-[10px] text-neutral-500">{result.path}</p>
           {result.excluded.length > 0 && (
@@ -705,6 +713,7 @@ function ExportButton({ datasetId, disabled }: { datasetId: string; disabled: bo
           )}
         </div>
       )}
+      <BlurPanel datasetId={datasetId} watch={watch} onFinished={run} />
     </div>
   );
 }

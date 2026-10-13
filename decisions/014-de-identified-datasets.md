@@ -1,6 +1,6 @@
 # 014. De-identified datasets — participant codes, a checked export, withdrawal by code
 
-- **Status**: Accepted (step 1 of 2 — face-blurred video in the export is step 2)
+- **Status**: Accepted (step 2, face-blurred video in the export, added 2026-10-13)
 - **Date**: 2026-10-13
 - **Phase**: 6 (datasets / RQ2)
 
@@ -54,6 +54,45 @@ Before this decision a dataset did identify people:
    appends a line to `data/datasets/{id}/deletions.jsonl` — code, time, counts, no
    data. Models already trained are not changed.
 
+### Step 2 — face-blurred video in the export
+
+Video goes into the export only as a face-blurred copy (`capture.cv.face_blur`,
+`api.services.video_blur`). A face is wherever either of two sources puts one,
+and both are always pixelated:
+
+- **pose** — the clip's own MediaPipe landmarks: face points for the centre,
+  shoulders for the size and the chin (so the box holds when the head turns),
+  joined over ±150 ms of pose frames (so a fast move doesn't outrun it). Finds
+  the fighter even behind the gloves.
+- **YuNet** (OpenCV model zoo, `models/face/`, fetched once and checked against
+  its sha256) — side-on faces, jaw and beard, and anyone else in view.
+
+**Fail closed**: a frame where neither finds a face is pixelated whole; a clip
+that can't be blurred (unreadable, encoding fails, the output check fails) is
+left out of the export and named in its warnings — never exported as recorded.
+Each copy is checked after encoding: one video stream, every frame, no metadata
+tags. It comes with `{camera}.frames.csv` (each frame's t_ms on the take
+timeline; the WebM's variable frame rate can't survive a re-encode) and a strip
+of blurred close-ups for the researcher to check.
+
+Copies live in `{dataset}/blurred/{take}/`, made once and redone only when the
+recording or `BLUR_VERSION` changes. The export starts blurring what's pending
+in the background (about half the video's length); the dataset page shows
+progress and exports again when it's done. The Train button's export doesn't
+start it — training needs no video. Deleting a take or withdrawing a participant
+removes their blurred copies too.
+
+A trial on 5 clips from all three cameras: pose found a face in 99–100% of
+frames, YuNet in 99.9–100%; YuNet's box reached past pose's in almost every
+frame (pose alone left jaw or beard showing side-on); no frame needed the
+whole-frame fallback; the only false alarm was a raised fist (33 of ~4,200
+frames). OpenCV's built-in Haar detector was rejected: it flagged a lamp
+reflection and a curtain in most frames and missed side-on faces.
+
+Known limit: a reflection or a person whose face isn't visible isn't found — and
+needs no blurring; one whose face is visible is found by YuNet. Keep mirrors and
+glass doors out of shot when recording.
+
 ## Alternatives considered
 
 - **Codes only, everywhere (the original R1.1/R1.3).** Rejected by the researcher:
@@ -73,6 +112,5 @@ Before this decision a dataset did identify people:
 - Recordings made before this change still have sound and faces on this machine;
   they never reach the export (no video is exported until step 2 blurs it).
 - `dataset_participant.code` needs `alembic upgrade head` on existing databases.
-- Follow-ups: step 2 (face-blurred video in the export); terms acceptance at
-  sign-up; the label provenance in `protocol.json` names its detector under a
+- Follow-ups: terms acceptance at sign-up; the label provenance in `protocol.json` names its detector under a
   `name` field, so it isn't exported (labels carry a content-hash `version`).

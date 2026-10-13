@@ -444,6 +444,33 @@ export interface DatasetExport {
   counts: { takes: number; fighters: number; labels: number };
   warnings: string[];
   excluded: { take_id: string; reason: string }[];
+  takes: { take_id: string; video: { camera: string }[]; video_left_out: { camera: string }[] }[];
+  /** Face blurring the export started for videos not blurred yet (ADR-014). */
+  blur?: { running: boolean; done: number; total: number; counts: BlurCounts; error?: string | null };
+}
+
+export interface BlurCounts {
+  ready: number;
+  pending: number;
+  failed: number;
+}
+
+/** A dataset's face blurring: the background job and every clip's state. */
+export interface BlurStatus {
+  running: boolean;
+  done: number;
+  total: number;
+  current?: string | null;
+  error?: string | null;
+  counts: BlurCounts;
+  clips: {
+    take_id: string;
+    camera: string;
+    status: "ready" | "pending" | "failed";
+    error?: string;
+    has_check: boolean;
+    stats?: { frames: number; face_from_pose: number; face_from_detector: number; whole_frame: number };
+  }[];
 }
 
 /** Camera studio: phones link once and follow whichever capture is open. */
@@ -1164,8 +1191,27 @@ export const api = {
       method: "POST",
     }),
   // Write {dataset}/export/manifest.json (takes, files, splits) and return it.
-  datasetExport: (datasetId: string) =>
-    req<DatasetExport>(`/v2/datasets/${datasetId}/export`, { method: "POST" }),
+  // `blur: false` exports without starting face blurring (training needs no video).
+  datasetExport: (datasetId: string, opts?: { blur?: boolean }) =>
+    req<DatasetExport>(
+      `/v2/datasets/${datasetId}/export${opts?.blur === false ? "?blur=false" : ""}`,
+      { method: "POST" },
+    ),
+  blurStatus: (datasetId: string) => req<BlurStatus>(`/v2/datasets/${datasetId}/blur`),
+  startBlur: (datasetId: string) =>
+    req<BlurStatus>(`/v2/datasets/${datasetId}/blur`, { method: "POST" }),
+  /** A clip's blurred close-ups, as a blob URL (an <img> can't send the token). */
+  blurCheckUrl: async (datasetId: string, takeId: string, camera: string): Promise<string | null> => {
+    const token =
+      (typeof window !== "undefined" &&
+        (localStorage.getItem("alion.token") ?? sessionStorage.getItem("alion.token"))) ||
+      "";
+    const r = await fetch(`${BASE}/v2/datasets/${datasetId}/blur/${takeId}/${encodeURIComponent(camera)}.jpg`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) return null;
+    return URL.createObjectURL(await r.blob());
+  },
   // Camera studio — linked phones follow the coach's open capture.
   studio: () => req<Studio>("/v2/studio"),
   setStudioActive: (kind: "session" | "take", id: string) =>

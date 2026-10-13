@@ -63,7 +63,8 @@ export function TrainingCard({
     setStarting(true);
     setErr(null);
     try {
-      await api.datasetExport(datasetId); // every take in, recovered pose included
+      // every take in, recovered pose included; no face blurring — training needs no video
+      await api.datasetExport(datasetId, { blur: false });
       setSt(await api.trainCounter(datasetId));
     } catch (e) {
       setErr(errText(e));
