@@ -82,6 +82,21 @@ YOLO_MODEL_SIZES = ("yolov8n-pose", "yolov8s-pose", "yolov8m-pose", "yolov8l-pos
 DEFAULT_YOLO_MODEL = "yolov8n-pose"  # nano — fastest, good enough for single-cam gym
 
 
+def _usage_data_off() -> None:
+    """Ultralytics sends anonymous usage statistics unless its `sync` setting is
+    off, and that setting lives per machine. Turn it off from here, before any
+    model loads, so no install of this app reports to an outside service
+    (ADR-015) whatever the machine's setting says."""
+    try:
+        from ultralytics import settings  # type: ignore
+    except ImportError:  # older ultralytics
+        import ultralytics.utils  # type: ignore
+
+        settings = ultralytics.utils.SETTINGS
+    if settings.get("sync", True):
+        settings.update({"sync": False})
+
+
 class YOLOPoseEstimator:
     """YOLOv8-based pose estimator. Same interface as `PoseEstimator`.
 
@@ -112,6 +127,7 @@ class YOLOPoseEstimator:
         """Load the YOLO model. Downloads weights on first use (~6 MB for nano)."""
         from ultralytics import YOLO  # type: ignore
 
+        _usage_data_off()
         self._model = YOLO(self._model_name + ".pt")
         try:
             yield self

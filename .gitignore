@@ -21,6 +21,8 @@ data/photos/
 # IMU wrist mapping — macOS Bluetooth IDs are per-Mac, so this is local config
 data/imu/
 data/datasets/
+# Counters trained on participants' data stay local (ADR-015)
+data/ml/punch_counter/
 data/capture/
 *.db
 *.sqlite

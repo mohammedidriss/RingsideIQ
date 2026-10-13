@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MEDIAPIPE_WASM, poseModelUrl, type PoseModel } from "@/lib/mediapipe";
 import { PunchDetector, classifyPunchType, type PunchEvent } from "@/lib/punchDetector";
 import { api } from "@/lib/api";
 
@@ -25,8 +26,8 @@ type Phase = "idle" | "loading" | "ready" | "countdown" | "recording" | "uploadi
 // a clear accuracy gain that still keeps ~30 fps on a GPU. Switch to `heavy`
 // for maximum accuracy if the machine can sustain the frame rate (heavy is
 // slower, and fewer frames/second hurts fast-punch sampling — measure first).
-const POSE_MODEL: "lite" | "full" | "heavy" = "full";
-const MODEL_URL = `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${POSE_MODEL}/float16/1/pose_landmarker_${POSE_MODEL}.task`;
+const POSE_MODEL: PoseModel = "full";
+const MODEL_URL = poseModelUrl(POSE_MODEL); // served by the dashboard itself (ADR-015)
 
 export function BrowserCapture({ sessionId, stance, onDone }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -59,7 +60,7 @@ export function BrowserCapture({ sessionId, stance, onDone }: Props) {
     try {
       const { PoseLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
       const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
+        MEDIAPIPE_WASM
       );
       const landmarker = await PoseLandmarker.createFromOptions(vision, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },

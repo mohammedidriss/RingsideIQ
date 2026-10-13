@@ -24,8 +24,31 @@ Railway config and the Railway migration script are removed. The Docker image
 stays for running the API locally (its data directory should be on an encrypted
 volume). CI (`ci.yml`) still runs the tests on GitHub — it sees code, never data.
 
+### Nothing else calls out either
+
+- **MediaPipe is served by the dashboard.** Camera pages used to fetch the pose
+  engine from jsDelivr (unversioned — whatever was latest, not the 0.10.x the
+  app is built against) and the pose model from Google storage on every open.
+  `scripts/mediapipe-assets.mjs` now copies the engine from the installed
+  `@mediapipe/tasks-vision` and the models from `models/mediapipe/` into
+  `public/mediapipe/` before every dev or build (`predev*`, `prebuild`);
+  `lib/mediapipe.ts` points the pages there. Recording works without internet.
+- **Next.js sends no usage data**: every `next` script runs with
+  `NEXT_TELEMETRY_DISABLED=1`.
+- **YOLO sends no usage statistics**: `pose_yolo` turns Ultralytics' `sync`
+  setting off before a model loads, whatever the machine's setting.
+- `tests/unit/test_local_only.py` keeps it that way: no outside host in the
+  dashboard source, usage data off in every Next script, MediaPipe copied before
+  dev and build, YOLO's statistics off.
+
+Still fetched once at setup, never per use: the pose models
+(`ensure_pose_model`, from Google storage, only if `models/mediapipe/` lacks
+them) and YOLO weights (from GitHub, only if the `.pt` file is missing).
+
 ## Alternatives considered
 
+- **Load MediaPipe from the CDN, pinned to a version.** Fixes the version drift
+  but still contacts jsDelivr and Google from every camera, and needs internet.
 - **Keep the deploys for a future production.** A deploy on every push is how
   data ends up in the cloud unnoticed; a future hosted setup needs its own
   decision (region, encryption, agreements) and can add a deploy then.

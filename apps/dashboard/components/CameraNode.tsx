@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MEDIAPIPE_WASM, poseModelUrl } from "@/lib/mediapipe";
 import { PunchDetector } from "@/lib/punchDetector";
 import { api, type CaptureRef } from "@/lib/api";
 
@@ -515,12 +516,11 @@ export function CameraNode({
       try {
         const { PoseLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
         const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm",
+          MEDIAPIPE_WASM, // served by the dashboard itself, not a CDN (ADR-015)
         );
         const lm = await PoseLandmarker.createFromOptions(vision, {
           baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+            modelAssetPath: poseModelUrl("full"),
             delegate: "GPU",
           },
           runningMode: "VIDEO",

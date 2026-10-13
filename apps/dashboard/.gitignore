@@ -2,3 +2,6 @@
 # Local TLS certs for LAN HTTPS (multi-camera)
 certs/
 certificates/
+
+# MediaPipe engine + pose models, copied in by scripts/mediapipe-assets.mjs (ADR-015)
+public/mediapipe/
