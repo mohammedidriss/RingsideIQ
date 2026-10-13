@@ -58,6 +58,18 @@ The camera pipeline never contributes to its own ground truth.
 
 ## 4. Take procedure (in Alion)
 
+**Record by category (the default).** Every block is its own short take: on
+the dataset page, each participant has a card per block (Jab, Cross, …, 1-2,
+No punches, Free). **Record** on a card records just that block in automatic
+mode, saves when the block ends, and shows the take's checks. Then you choose
+**Record another**, **Redo** (deletes that take and records the block again),
+or go back to the categories. Nothing advances on its own. A 50-second take
+that goes wrong costs 50 seconds, not a 16-minute sitting. The card
+shows how many takes each block has.
+
+A full-protocol take (all blocks in one recording) works the same way, with
+the steps below:
+
 1. **Datasets** → open the dataset → make sure the fighter is a participant
    with consent → start a **new take**. Phones scan the take's QR.
 2. Press **Start all cameras**. The wrist sensors start with them; the live
@@ -139,16 +151,22 @@ already score against:
   counted as `off_hand`, not labeled. In the no-punch block every burst is a
   false alarm and is counted. In free shadowboxing both wrists are labeled with
   `punch_type: null`.
-- **Combos.** Bursts from both wrists are grouped into combos: a lull of more
-  than 1 s starts the next one, and combos are 3 s apart. Each combo's sequence
-  is then walked in order, and every punch takes the next burst on its own
-  wrist at least 120 ms after the previous punch. That means a jab's return to
-  guard that lands before the cross is never taken as the following hook.
-  Only complete combos are labeled. The block's count is complete combos (15
-  is the target), and incomplete ones are counted for review. Detection inside
-  combos uses a 1.2 g threshold and a 250 ms gap, so a double jab stays two
-  punches. These settings are provisional until the first combo take is
-  checked against video.
+- **Combos.** Bursts from both wrists are grouped into combos at the pauses
+  between them. That pause length is found per block, because a fixed value
+  fails: on the first combo take, pauses *inside* a 3-2 (hook, return to guard,
+  then the cross) reached 1.3 s, while pauses *between* 1-1-2s went down to
+  1.36 s. With 15 combos there are 14 long pauses. If they clearly stand out
+  (≥1.2× the next-longest), the break sits halfway between the 14th and the
+  15th longest; otherwise it's the biggest jump among pauses of at least
+  0.4 s. Each combo's sequence is then walked in order, and every punch takes
+  the next burst on its own wrist at least 120 ms after the previous punch.
+  That means a jab's return to guard that lands before the cross is never
+  taken as the following hook. Only complete combos are labeled. The block's
+  count is complete combos (15 is the target), and incomplete ones are counted
+  for review. Detection inside combos uses a 1.2 g threshold and a 250 ms gap,
+  so a double jab stays two punches. On the first combo take (8c87402d) this
+  gave 15, 15, 15 and 14 complete of 15; the missing one had no cross on
+  either wrist.
 - **Provenance.** Block times, the detector parameters, per-block counts and a
   checksum of the generated labels are stored in `{take}/protocol.json`.
 
@@ -157,7 +175,7 @@ already score against:
 | Check | Healthy | If not |
 |---|---|---|
 | Typed block count | within ±2 of the reps thrown | Redo the block, or fix in review |
-| No-punch block bursts | 0–2 | Slow or controlled movement; review the threshold |
+| No-punch block bursts | a few | Feints and sharp slips are punch-like on purpose. On the first combo take, 8 bursts came in the block's first 30 s and the cameras saw 4 of them as punch-like too. They're the hard negatives the detector must learn to reject, so keep them, and check the video only if there are many or they're spread through the block |
 | Off-hand bursts in typed blocks | a few | Many → the guard hand is moving too much; ask for a still guard |
 
 ## 6. Review and inter-annotator agreement
@@ -191,20 +209,28 @@ unless asked explicitly (**Regenerate** then confirm).
 
 ### Export
 
-**Export** on a dataset writes `data/datasets/{dataset}/export/manifest.json`,
-the one file the training scripts read. It lists every completed take with its
-files and per-block QA counts, the splits, the takes left out (still recording,
-discarded), and warnings: unreviewed auto-labels, takes without sensor data or
-labels. Fighters appear by id only.
+**Export** on a dataset writes a de-identified copy under
+`data/datasets/{dataset}/export/` (ADR-014). `manifest.json` is the one file
+the training scripts read, and `takes/{take}/` holds each take's pose, sensor
+data and labels under the participant's code (F-0001). There's no video,
+since faces aren't blurred yet, and no name anywhere: every file is checked
+for the participants' personal data before the copy replaces the previous
+export.
 
-- **3+ fighters → `by_fighter`:** about 20% of fighters are held out for test
-  and 20% for validation. Whole takes go to their fighter's split, and a seeded
-  shuffle makes the split identical on every export.
-- **1–2 fighters → `pilot`:** each take is split by block. The single-punch and
-  no-punch blocks go to train; combos and free shadowboxing go to test. So the
-  pilot asks whether punches learned in isolation are recognized inside
-  combinations. The export warns that this can't support a claim about other
-  people.
+The manifest lists every completed take with its per-block QA counts and
+whether its wrists were swapped, the splits, and the takes left out
+(discarded, or started but not finished). Drafts whose cameras never started
+are skipped. It also carries warnings: unreviewed auto-labels, takes without
+sensor data or labels, suspected wrist swaps.
+
+- **3+ participants → `by_fighter`:** about 20% of participants are held out
+  for test and 20% for validation. Whole takes go to their participant's
+  split, and a seeded shuffle makes the split identical on every export.
+- **1–2 participants → `pilot`:** each take is split by block (a category take
+  has just one). The single-punch and no-punch blocks go to train; combos and
+  free shadowboxing go to test. So the pilot asks whether punches learned in
+  isolation are recognized inside combinations. The export warns that this
+  can't support a claim about other people.
 
 ## 8. Where everything lives
 

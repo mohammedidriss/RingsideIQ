@@ -75,6 +75,7 @@ class ProtocolOut(BaseModel):
     recording: bool  # the cameras are rolling — blocks can be started
     imu_hands_swapped: bool  # labels read imu.csv with left/right reversed
     swap_evidence: list[str]  # why the sensors look swapped; empty if they don't
+    take_block: str | None = None  # a one-block take (take.json "block"): only this block
 
 
 class StartIn(BaseModel):
@@ -102,6 +103,12 @@ def _now(take_id: UUID) -> float:
             detail="Start the cameras first — blocks are timed from the recording.",
         )
     return t
+
+
+def _block_of(folder: Path) -> str | None:
+    """The protocol block a one-block take was created for, if any."""
+    block = dataset_store.read_take_json(folder).get("block")
+    return str(block) if block in proto.SPECS else None
 
 
 def _out(take_id: UUID, folder: Path, data: dict[str, Any], stance: str | None) -> ProtocolOut:
@@ -138,6 +145,7 @@ def _out(take_id: UUID, folder: Path, data: dict[str, Any], stance: str | None) 
         recording=now is not None,
         imu_hands_swapped=proto.hands_swapped(data),
         swap_evidence=proto.swap_evidence(data, proto.camera_hands(folder)),
+        take_block=_block_of(folder),
     )
 
 

@@ -22,9 +22,11 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import itertools
 import json
 import os
 import threading
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -285,13 +287,32 @@ class BlockResult:
     labels: list[dict[str, Any]]
 
 
-# Combos (provisional — check against the first combo take's video). Inside a
-# combo, punches come 0.2–0.6 s apart, so detection uses a shorter gap and a
-# threshold between the hook and default settings; combos themselves are ~3 s
-# apart, so a lull longer than COMBO_GAP_MS starts the next one.
+# Combos. Inside a combo punches come 0.2–1.3 s apart, so detection uses a
+# shorter gap and a threshold between the hook and default settings. Checked on
+# the first combo take (8c87402d): 15, 15, 15 and 14/15 complete.
 COMBO_DETECT: dict[str, Any] = {"threshold_g": 1.2, "min_gap_ms": 250.0}
-COMBO_GAP_MS = 1000.0
 COMBO_MIN_STEP_MS = 120.0  # the next punch of a combo comes at least this much later
+COMBO_BREAK_RANGE_MS = (900.0, 2500.0)  # where the between-combos pause can sit
+
+
+def combo_break_ms(gaps_ms: Sequence[float], expected: int | None) -> float:
+    """The pause length that separates one combo from the next, found per block —
+    a fixed value can't work: the first combo take had 1.3 s pauses *inside* a
+    3-2 (hook, return to guard, cross) and 1.36 s pauses *between* 1-1-2s.
+
+    With `expected` combos there are expected − 1 long pauses; if they clearly
+    stand out (≥1.2× the next-longest), the break sits halfway between the two.
+    Otherwise it sits at the biggest relative jump among pauses ≥ 0.4 s."""
+    lo, hi = COMBO_BREAK_RANGE_MS
+    g = sorted((float(x) for x in gaps_ms), reverse=True)
+    k = (expected or 0) - 1
+    if k >= 1 and len(g) > k and g[k - 1] >= 1.2 * g[k]:
+        return float(np.clip((g[k - 1] + g[k]) / 2, lo, hi))
+    asc = sorted(x for x in g if x >= 400.0)
+    if len(asc) < 2:
+        return 1500.0
+    j = int(np.argmax([asc[i + 1] / asc[i] for i in range(len(asc) - 1)]))
+    return float(np.clip((asc[j] + asc[j + 1]) / 2, lo, hi))
 
 
 def _label_combos(
@@ -311,9 +332,10 @@ def _label_combos(
             for e in detect_punches(t[inside], ax[inside], ay[inside], az[inside], **COMBO_DETECT)
         ]
     bursts.sort()
+    brk = combo_break_ms([b[0] - a[0] for a, b in itertools.pairwise(bursts)], spec.reps)
     groups: list[list[tuple[float, str]]] = []
     for b in bursts:
-        if groups and b[0] - groups[-1][-1][0] <= COMBO_GAP_MS:
+        if groups and b[0] - groups[-1][-1][0] < brk:
             groups[-1].append(b)
         else:
             groups.append([b])

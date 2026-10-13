@@ -174,6 +174,8 @@ def build_manifest(
     warnings: list[str] = []
     for ref in takes:
         folder = dataset_store.take_dir(ref.take_id)
+        if ref.status == "recording" and folder is not None and not dataset_store.started(folder):
+            continue  # a draft: "Record take" opened it, but the cameras never started
         if ref.status != "completed":
             excluded.append({"take_id": str(ref.take_id), "reason": ref.status})
             continue

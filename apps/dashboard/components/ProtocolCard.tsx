@@ -83,8 +83,10 @@ export function ProtocolCard({ takeId, readOnly = false }: { takeId: string; rea
   // Latest kept attempt per block key (a Redo discards the earlier one).
   const latest = new Map<string, ProtocolBlock>();
   for (const b of p.blocks) if (!b.discarded) latest.set(b.key, b);
-  const nextKey = p.plan.find((s) => !latest.has(s.key))?.key ?? null;
-  const done = p.plan.filter((s) => latest.get(s.key)?.t_end_ms != null).length;
+  // A one-block take (recorded from a category) shows just its own block.
+  const plan = p.take_block ? p.plan.filter((s) => s.key === p.take_block) : p.plan;
+  const nextKey = plan.find((s) => !latest.has(s.key))?.key ?? null;
+  const done = plan.filter((s) => latest.get(s.key)?.t_end_ms != null).length;
 
   return (
     <div className="rounded-2xl border border-white/10 p-4">
@@ -96,7 +98,7 @@ export function ProtocolCard({ takeId, readOnly = false }: { takeId: string; rea
         <span>
           <span className="text-sm font-semibold">Dataset protocol</span>
           <span className="ml-2 text-[11px] text-neutral-500">
-            {done}/{p.plan.length} blocks
+            {p.take_block ? (done ? "done" : "1 block") : `${done}/${plan.length} blocks`}
           </span>
         </span>
         <span className="text-xs text-neutral-500">{open ? "▾" : "▸"}</span>
@@ -164,7 +166,7 @@ export function ProtocolCard({ takeId, readOnly = false }: { takeId: string; rea
           )}
 
           <ol className="space-y-1">
-            {p.plan.map((spec) => {
+            {plan.map((spec) => {
               const b = latest.get(spec.key);
               const isActive = active?.key === spec.key && b === active;
               const finished = b?.t_end_ms != null;

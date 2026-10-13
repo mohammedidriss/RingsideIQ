@@ -433,6 +433,7 @@ export interface TakeProtocol {
   recording: boolean; // the cameras are rolling — blocks can be started
   imu_hands_swapped: boolean; // labels read imu.csv with left/right reversed
   swap_evidence: string[]; // why the sensors look swapped; empty if they don't
+  take_block: string | null; // a one-block take: the card shows only this block
 }
 
 /** The training manifest written by POST /v2/datasets/{id}/export. */

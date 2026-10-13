@@ -236,7 +236,10 @@ def test_pilot_export_trains_on_scripted_blocks_and_tests_on_free(
     _block(authed_client, clock, tid, "negatives", 5000, 10000)
     _block(authed_client, clock, tid, "free", 12000, 15000)
     _complete(authed_client, tid, 16000)
-    unfinished = _take(authed_client, did, "southpaw")  # still "recording": left out
+    unfinished = _take(authed_client, did, "southpaw")  # cameras started, never finished
+    from api.services import dataset_store
+
+    dataset_store.update_take_json(_folder(unfinished), t0_ms=1.0)
 
     r = authed_client.post(f"/v2/datasets/{did}/export")
     assert r.status_code == 200, r.text
@@ -452,3 +455,64 @@ def test_pilot_split_tests_on_combos(authed_client: TestClient, clock: Clock) ->
     m = authed_client.post(f"/v2/datasets/{did}/export").json()
     assert [s["block"] for s in m["splits"]["train"]] == ["jab"]
     assert [s["block"] for s in m["splits"]["test"]] == ["combo_12"]
+
+
+def test_a_slow_three_two_stays_one_combo(authed_client: TestClient, clock: Clock) -> None:
+    """The first combo take: a 3-2 thrown as hook, return to guard, then the cross
+    ~1.1 s after the hook. A fixed 1 s lull rule split those in half."""
+    tid = _take(authed_client, _dataset(authed_client), "orthodox")
+    bases = [1000.0 + 3000.0 * i for i in range(4)]
+    left = [x for b in bases for x in (b, b + 400.0)]  # lead hook, its return to guard
+    right = [b + 1150.0 for b in bases]  # the cross
+    _write_imu(tid, _imu_lines("left", 15, left) + _imu_lines("right", 15, right))
+    body = _block(authed_client, clock, tid, "combo_32", 0, 13500)
+    assert body["blocks"][0]["detected"] == 4 and body["blocks"][0]["off_hand"] == 0
+    labels = json.loads((_folder(tid) / "labels.json").read_text())
+    got = [
+        (round(lab["t_ms"] - b, -1), lab["punch_type"])
+        for b in bases
+        for lab in labels
+        if b - 100 <= lab["t_ms"] < b + 2000
+    ]
+    assert got == [(0.0, "hook"), (1150.0, "cross")] * 4
+
+
+def test_combo_break_uses_the_expected_number_of_long_pauses() -> None:
+    from api.services.dataset_protocol import combo_break_ms
+
+    inside = [300.0, 1100.0] * 15  # hook → return → cross, 15 times
+    between = [2000.0 + 50 * i for i in range(14)]
+    assert 1100.0 < combo_break_ms(inside + between, 15) < 2000.0
+    # Without a usable count, the biggest jump among pauses still finds it.
+    assert 1100.0 < combo_break_ms(inside + between, None) < 2000.0
+
+
+def test_export_skips_drafts_that_never_started(authed_client: TestClient, clock: Clock) -> None:
+    did = _dataset(authed_client)
+    _take(authed_client, did, "orthodox")  # "Record take" pressed, cameras never started
+    m = authed_client.post(f"/v2/datasets/{did}/export").json()
+    assert m["excluded"] == [] and m["counts"]["takes"] == 0
+
+
+def test_a_one_block_take_labels_and_exports_just_its_block(
+    authed_client: TestClient, clock: Clock
+) -> None:
+    """Recording by category: a take made for one block (take.json "block")."""
+    did = _dataset(authed_client)
+    fid = authed_client.post("/fighters", json={"name": "Category", "stance": "orthodox"}).json()[
+        "id"
+    ]
+    authed_client.put(
+        f"/v2/datasets/{did}/participants", json={"fighter_id": fid, "consent": "self"}
+    )
+    r = authed_client.post(f"/v2/datasets/{did}/takes", json={"fighter_id": fid, "block": "cross"})
+    assert r.status_code == 201, r.text
+    tid = r.json()["id"]
+    _write_imu(tid, _imu_lines("right", 8, [1000, 2500, 4000]))
+    body = _block(authed_client, clock, tid, "cross", 0, 6000)
+    assert body["take_block"] == "cross" and body["blocks"][0]["detected"] == 3
+    labels = json.loads((_folder(tid) / "labels.json").read_text())
+    assert {(lab["hand"], lab["punch_type"]) for lab in labels} == {("right", "cross")}
+    _complete(authed_client, tid, 8000)
+    m = authed_client.post(f"/v2/datasets/{did}/export").json()
+    assert [s["block"] for s in m["splits"]["train"]] == ["cross"]
