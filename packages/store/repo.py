@@ -987,6 +987,14 @@ class UserRepo:
         stmt = select(User).where(User.email == email)
         return self._session.exec(stmt).first()
 
+    def accept_terms(self, user: User, version: str) -> User:
+        user.terms_version = version
+        user.terms_accepted_at = datetime.now(UTC)
+        self._session.add(user)
+        self._session.commit()
+        self._session.refresh(user)
+        return user
+
     def set_profile_id(self, user_id: UUID, profile_id: UUID) -> None:
         row = self.get(user_id)
         if row:

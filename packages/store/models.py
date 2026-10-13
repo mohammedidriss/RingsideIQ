@@ -202,6 +202,10 @@ class User(SQLModel, table=True):
     photo_path: str | None = None
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # The terms and conditions this person accepted, and when (ADR-016). Null until
+    # they accept; requests are refused while it isn't the current version.
+    terms_version: str | None = Field(default=None, max_length=40)
+    terms_accepted_at: datetime | None = None
 
 
 class UserCreate(SQLModel):
@@ -220,6 +224,8 @@ class UserRead(SQLModel):
     photo_path: str | None = None
     is_active: bool
     created_at: UtcDatetime
+    terms_version: str | None = None
+    terms_accepted_at: UtcDatetime | None = None
 
 
 # ----------------------------------------------------------------------

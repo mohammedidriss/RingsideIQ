@@ -4,6 +4,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileTopBar, MobileBottomBar } from "@/components/MobileNav";
+import { TermsGate } from "@/components/TermsGate";
+import { api, type TermsInfo } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -11,6 +13,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // The current terms (ADR-016): a signed-in person who hasn't accepted them sees
+  // only the TermsGate — the API refuses their requests until they do.
+  const [terms, setTerms] = useState<TermsInfo | null>(null);
+  const [termsFailed, setTermsFailed] = useState(false);
+  useEffect(() => {
+    if (user && !terms) api.terms().then(setTerms).catch(() => setTermsFailed(true));
+  }, [user, terms]);
 
   // The camera slave page (ADR-010) is joined by phones with only a session token —
   // it must render with no login and no app chrome.
@@ -21,12 +30,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
-  useEffect(() => {
-    if (!loading && !user && pathname !== "/" && !isCameraSlave) router.push("/");
-  }, [loading, user, pathname, router, isCameraSlave]);
+  const isPublic = pathname === "/" || pathname === "/terms";
 
-  // Login page and the public camera slave page — no chrome, no guard.
-  if (pathname === "/") return <>{children}</>;
+  useEffect(() => {
+    if (!loading && !user && !isPublic && !isCameraSlave) router.push("/");
+  }, [loading, user, isPublic, router, isCameraSlave]);
+
+  // Login page, the terms and the public camera slave page — no chrome, no guard.
+  if (isPublic) return <>{children}</>;
   if (isCameraSlave) return <>{children}</>;
 
   if (loading) {
@@ -45,6 +56,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+
+  if (!terms && !termsFailed) {
+    return <div className="flex h-screen items-center justify-center text-neutral-400">Loading…</div>;
+  }
+  if (terms && user.terms_version !== terms.version) return <TermsGate terms={terms} />;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#0a0a0f]">

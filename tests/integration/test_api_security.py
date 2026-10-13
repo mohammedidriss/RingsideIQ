@@ -18,6 +18,8 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from api.services.terms import TERMS_VERSION
+
 BOGUS = str(uuid4())
 
 
@@ -79,6 +81,8 @@ def _register(client: TestClient, password: str) -> int:
             "password": password,
             "name": "PW Test",
             "role": "fighter",
+            "accept_terms": True,
+            "terms_version": TERMS_VERSION,
         },
     ).status_code
 

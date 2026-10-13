@@ -1001,6 +1001,16 @@ export interface AuthUser {
   photo_path: string | null;
   is_active: boolean;
   created_at: string;
+  /** The terms version they accepted (ADR-016); null until they have. */
+  terms_version: string | null;
+  terms_accepted_at: string | null;
+}
+
+/** The current terms and conditions (GET /auth/terms). */
+export interface TermsInfo {
+  version: string;
+  text: string; // Markdown
+  placeholder: boolean;
 }
 
 export interface UnifiedPerson {
@@ -1947,11 +1957,29 @@ export const api = {
     ),
 
   // Auth
-  register: (email: string, password: string, name: string, role: UserRole = "fighter") =>
+  register: (email: string, password: string, name: string, role: UserRole, termsVersion: string) =>
     req<AuthResponse>("/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name, role }),
+      body: JSON.stringify({
+        email,
+        password,
+        name,
+        role,
+        accept_terms: true,
+        terms_version: termsVersion,
+      }),
+    }),
+  terms: () =>
+    fetch(`${BASE}/auth/terms`).then(async (r) => {
+      if (!r.ok) throw new Error(`Couldn't load the terms (${r.status})`);
+      return r.json() as Promise<TermsInfo>;
+    }),
+  acceptTerms: (version: string) =>
+    req<AuthUser>("/auth/terms/accept", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version }),
     }),
   login: (email: string, password: string) => {
     const body = new URLSearchParams();

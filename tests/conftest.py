@@ -41,6 +41,7 @@ def authed_client(session: Session) -> Iterator[TestClient]:
     """TestClient pre-configured with an admin JWT — for routes that require auth."""
     from api.deps import db_session
     from api.main import app
+    from api.services.terms import TERMS_VERSION
 
     def _override() -> Iterator[Session]:
         yield session
@@ -54,6 +55,8 @@ def authed_client(session: Session) -> Iterator[TestClient]:
                 "password": "TestPass123!",
                 "name": "Test Admin",
                 "role": "admin",
+                "accept_terms": True,
+                "terms_version": TERMS_VERSION,
             },
         )
         token = resp.json()["access_token"]

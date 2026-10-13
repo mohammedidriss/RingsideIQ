@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlionWordmark } from "@/components/AlionLogo";
 import { useAuth } from "@/lib/auth";
-import { type AuthUser, type UserRole } from "@/lib/api";
+import { api, type AuthUser, type TermsInfo, type UserRole } from "@/lib/api";
 
 /** Compute the profile URL a user should land on after login.
  *  Returns null if no suitable destination exists (e.g. profile_id missing). */
@@ -30,6 +30,13 @@ export default function Home() {
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Creating an account means accepting the current terms (ADR-016).
+  const [terms, setTerms] = useState<TermsInfo | null>(null);
+  const [agreed, setAgreed] = useState(false);
+
+  useEffect(() => {
+    if (mode === "register" && !terms) api.terms().then(setTerms).catch(() => {});
+  }, [mode, terms]);
 
   // Auto-redirect authenticated users to their profile page
   useEffect(() => {
@@ -48,7 +55,8 @@ export default function Home() {
       if (mode === "login") {
         loggedInUser = await login(email, password, stayLoggedIn);
       } else {
-        loggedInUser = await register(email, password, name, role, stayLoggedIn);
+        if (!terms || !agreed) throw new Error("Please accept the terms and conditions");
+        loggedInUser = await register(email, password, name, role, stayLoggedIn, terms.version);
       }
       // Redirect immediately to profile
       const dest = profileUrlFor(loggedInUser);
@@ -187,6 +195,24 @@ export default function Home() {
               <span className="text-xs text-neutral-400">Stay logged in</span>
             </label>
 
+            {mode === "register" && (
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-white/20 bg-white/[0.03] accent-emerald-500"
+                />
+                <span className="text-xs text-neutral-400">
+                  I agree to the{" "}
+                  <a href="/terms" target="_blank" className="text-emerald-300 underline hover:text-emerald-200">
+                    terms and conditions
+                  </a>
+                  {terms ? ` (version ${terms.version})` : ""}
+                </span>
+              </label>
+            )}
+
             {error && (
               <p className="rounded-lg border border-red-500/30 bg-red-950/30 px-3 py-2 text-xs text-red-300">
                 {error}
@@ -195,7 +221,7 @@ export default function Home() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || (mode === "register" && (!agreed || !terms))}
               className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-black hover:bg-emerald-400 disabled:opacity-50"
             >
               {submitting

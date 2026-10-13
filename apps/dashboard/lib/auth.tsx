@@ -8,7 +8,14 @@ interface AuthState {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string, persist?: boolean) => Promise<AuthUser>;
-  register: (email: string, password: string, name: string, role: UserRole, persist?: boolean) => Promise<AuthUser>;
+  register: (
+    email: string,
+    password: string,
+    name: string,
+    role: UserRole,
+    persist: boolean,
+    termsVersion: string,
+  ) => Promise<AuthUser>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -80,8 +87,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(
-    async (email: string, password: string, name: string, role: UserRole, persist = true): Promise<AuthUser> => {
-      const res = await api.register(email, password, name, role);
+    async (
+      email: string,
+      password: string,
+      name: string,
+      role: UserRole,
+      persist: boolean,
+      termsVersion: string,
+    ): Promise<AuthUser> => {
+      const res = await api.register(email, password, name, role, termsVersion);
       saveToken(res.access_token, persist);
       setToken(res.access_token);
       setUser(res.user);

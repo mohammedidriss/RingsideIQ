@@ -17,6 +17,7 @@ from sqlmodel import Session as DBSession
 from sqlmodel import select
 
 from api.deps import db_session
+from api.services import terms
 from store import (
     CoachRepo,
     FighterRepo,
@@ -148,15 +149,31 @@ async def get_current_user(
     return user
 
 
-async def require_current_user(
+async def require_signed_in(
     user: User | None = Depends(get_current_user),
 ) -> User:
-    """Like get_current_user but raises 401 if not authenticated."""
+    """Like get_current_user but raises 401 if not authenticated. Doesn't check the
+    terms — only for the routes that let someone see and accept them."""
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+TERMS_NOT_ACCEPTED = "terms_not_accepted"
+
+
+async def require_current_user(user: User = Depends(require_signed_in)) -> User:
+    """A signed-in user who has accepted the current terms (ADR-016) — 403 until
+    they do, so nothing is used before they've agreed."""
+    if user.terms_version != terms.TERMS_VERSION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"{TERMS_NOT_ACCEPTED}: accept the terms and conditions "
+            f"(version {terms.TERMS_VERSION}) to continue",
         )
     return user
 
@@ -169,6 +186,9 @@ class RegisterRequest(BaseModel):
     password: str
     name: str
     role: UserRole = UserRole.FIGHTER
+    # Signing up means agreeing to the terms shown (ADR-016): both are required.
+    accept_terms: bool = False
+    terms_version: str | None = None
 
     @field_validator("email")
     @classmethod
@@ -207,7 +227,18 @@ def register(
     repo: UserRepo = Depends(_user_repo),
     session: DBSession = Depends(db_session),
 ) -> TokenResponse:
-    """Create a new user account, auto-create a linked profile, and return a JWT."""
+    """Create a new user account, auto-create a linked profile, and return a JWT.
+    Refused unless the current terms were accepted."""
+    if not data.accept_terms or data.terms_version != terms.TERMS_VERSION:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Accept the terms and conditions to create an account"
+            + (
+                f" (they've changed — the current version is {terms.TERMS_VERSION})"
+                if data.accept_terms
+                else ""
+            ),
+        )
     existing = repo.get_by_email(data.email)
     if existing:
         raise HTTPException(
@@ -222,6 +253,7 @@ def register(
     )
     hashed = _hash_password(data.password)
     user = repo.create(user_create, hashed)
+    user = repo.accept_terms(user, terms.TERMS_VERSION)
 
     # Auto-create a linked profile based on role
     profile_id = _create_profile_for_role(user, session)
@@ -291,9 +323,44 @@ def login(
 
 
 @router.get("/me", response_model=UserRead)
-def get_me(user: User = Depends(require_current_user)) -> UserRead:
-    """Return the current authenticated user."""
+def get_me(user: User = Depends(require_signed_in)) -> UserRead:
+    """Return the current authenticated user (also before they've accepted the
+    terms: `terms_version` tells the dashboard to ask)."""
     return UserRead.model_validate(user, from_attributes=True)
+
+
+class TermsOut(BaseModel):
+    version: str
+    text: str  # Markdown
+    placeholder: bool  # the draft text, not yet the approved terms
+
+
+@router.get("/terms", response_model=TermsOut)
+def get_terms() -> TermsOut:
+    """The current terms and conditions — public, so the sign-up form can show them."""
+    return TermsOut(
+        version=terms.TERMS_VERSION, text=terms.text(), placeholder=terms.is_placeholder()
+    )
+
+
+class AcceptTermsRequest(BaseModel):
+    version: str
+
+
+@router.post("/terms/accept", response_model=UserRead)
+def accept_terms(
+    data: AcceptTermsRequest,
+    user: User = Depends(require_signed_in),
+    repo: UserRepo = Depends(_user_repo),
+) -> UserRead:
+    """Record that the signed-in user accepted the terms — only the current version
+    (someone who read an older one is asked to read the new one)."""
+    if data.version != terms.TERMS_VERSION:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"The terms have changed — the current version is {terms.TERMS_VERSION}",
+        )
+    return UserRead.model_validate(repo.accept_terms(user, data.version), from_attributes=True)
 
 
 class UpdateProfileRequest(BaseModel):
